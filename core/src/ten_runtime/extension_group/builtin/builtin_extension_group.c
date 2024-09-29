@@ -7,10 +7,12 @@
 #include <stdlib.h>
 
 #include "include_internal/ten_runtime/addon/addon.h"
+#include "include_internal/ten_runtime/common/constant_str.h"
 #include "include_internal/ten_runtime/extension/extension_addon_and_instance_name_pair.h"
 #include "include_internal/ten_runtime/extension_group/extension_group.h"
 #include "include_internal/ten_runtime/ten_env/metadata.h"
 #include "include_internal/ten_runtime/ten_env/ten_env.h"
+#include "ten_runtime/addon/addon.h"
 #include "ten_runtime/addon/extension_group/extension_group.h"
 #include "ten_runtime/extension_group/extension_group.h"
 #include "ten_runtime/ten.h"
@@ -75,7 +77,7 @@ static void on_addon_destroy_instance_done(ten_env_t *ten_env,
   }
 }
 
-static void ten_default_extension_group_on_init(ten_extension_group_t *self,
+static void ten_builtin_extension_group_on_init(ten_extension_group_t *self,
                                                 ten_env_t *ten_env) {
   TEN_ASSERT(self, "Invalid argument.");
   TEN_ASSERT(ten_env, "Invalid argument.");
@@ -83,7 +85,7 @@ static void ten_default_extension_group_on_init(ten_extension_group_t *self,
   ten_env_on_init_done(ten_env, NULL);
 }
 
-static void ten_default_extension_group_on_deinit(ten_extension_group_t *self,
+static void ten_builtin_extension_group_on_deinit(ten_extension_group_t *self,
                                                   ten_env_t *ten_env) {
   TEN_ASSERT(self, "Invalid argument.");
   TEN_ASSERT(ten_env, "Invalid argument.");
@@ -91,7 +93,7 @@ static void ten_default_extension_group_on_deinit(ten_extension_group_t *self,
   ten_env_on_deinit_done(ten_env, NULL);
 }
 
-static void ten_default_extension_group_on_create_extensions(
+static void ten_builtin_extension_group_on_create_extensions(
     ten_extension_group_t *self, ten_env_t *ten_env) {
   TEN_ASSERT(self, "Invalid argument.");
   TEN_ASSERT(ten_env, "Invalid argument.");
@@ -135,7 +137,7 @@ static void ten_default_extension_group_on_create_extensions(
   }
 }
 
-static void ten_default_extension_group_on_destroy_extensions(
+static void ten_builtin_extension_group_on_destroy_extensions(
     ten_extension_group_t *self, ten_env_t *ten_env, ten_list_t extensions) {
   TEN_ASSERT(self, "Invalid argument.");
   TEN_ASSERT(ten_env, "Invalid argument.");
@@ -158,8 +160,8 @@ static void ten_default_extension_group_on_destroy_extensions(
   }
 }
 
-static void default_extension_group_addon_on_init(TEN_UNUSED ten_addon_t *addon,
-                                                  ten_env_t *ten_env) {
+void ten_builtin_extension_group_addon_on_init(TEN_UNUSED ten_addon_t *addon,
+                                               ten_env_t *ten_env) {
   bool result = ten_env_init_manifest_from_json(ten_env,
                                                 // clang-format off
                             "{\
@@ -174,22 +176,22 @@ static void default_extension_group_addon_on_init(TEN_UNUSED ten_addon_t *addon,
   ten_env_on_init_done(ten_env, NULL);
 }
 
-static void default_extension_group_addon_create_instance(ten_addon_t *addon,
-                                                          ten_env_t *ten_env,
-                                                          const char *name,
-                                                          void *context) {
+void ten_builtin_extension_group_addon_create_instance(ten_addon_t *addon,
+                                                       ten_env_t *ten_env,
+                                                       const char *name,
+                                                       void *context) {
   TEN_ASSERT(addon && name, "Invalid argument.");
 
   ten_extension_group_t *ext_group = ten_extension_group_create(
-      name, NULL, ten_default_extension_group_on_init,
-      ten_default_extension_group_on_deinit,
-      ten_default_extension_group_on_create_extensions,
-      ten_default_extension_group_on_destroy_extensions);
+      name, NULL, ten_builtin_extension_group_on_init,
+      ten_builtin_extension_group_on_deinit,
+      ten_builtin_extension_group_on_create_extensions,
+      ten_builtin_extension_group_on_destroy_extensions);
 
   ten_env_on_create_instance_done(ten_env, ext_group, context, NULL);
 }
 
-static void default_extension_group_addon_destroy_instance(
+void ten_builtin_extension_group_addon_destroy_instance(
     TEN_UNUSED ten_addon_t *addon, ten_env_t *ten_env, void *_extension_group,
     void *context) {
   ten_extension_group_t *extension_group =
@@ -201,17 +203,23 @@ static void default_extension_group_addon_destroy_instance(
   ten_env_on_destroy_instance_done(ten_env, context, NULL);
 }
 
-static ten_addon_t addon = {
+static ten_addon_t builtin_extension_group_addon = {
     NULL,
     TEN_ADDON_SIGNATURE,
-    default_extension_group_addon_on_init,
+    ten_builtin_extension_group_addon_on_init,
     NULL,
     NULL,
     NULL,
-    default_extension_group_addon_create_instance,
-    default_extension_group_addon_destroy_instance,
-    NULL,
+    ten_builtin_extension_group_addon_create_instance,
+    ten_builtin_extension_group_addon_destroy_instance,
     NULL,
 };
 
-TEN_REGISTER_ADDON_AS_EXTENSION_GROUP(default_extension_group, &addon);
+void ten_builtin_extension_group_addon_register(void) {
+  ten_addon_register_extension_group(TEN_STR_DEFAULT_EXTENSION_GROUP,
+                                     &builtin_extension_group_addon);
+}
+
+void ten_builtin_extension_group_addon_unregister(void) {
+  ten_addon_unregister_extension_group(TEN_STR_DEFAULT_EXTENSION_GROUP);
+}

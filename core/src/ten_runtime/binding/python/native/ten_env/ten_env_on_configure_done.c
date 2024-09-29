@@ -15,8 +15,8 @@
 #include "ten_utils/macro/check.h"
 #include "ten_utils/macro/mark.h"
 
-static void ten_env_notify_on_configure_done(ten_env_t *ten_env,
-                                             TEN_UNUSED void *user_data) {
+static void ten_env_proxy_notify_on_configure_done(ten_env_t *ten_env,
+                                                   TEN_UNUSED void *user_data) {
   TEN_ASSERT(
       ten_env &&
           ten_env_check_integrity(
@@ -46,9 +46,9 @@ PyObject *ten_py_ten_env_on_configure_done(PyObject *self, PyObject *args) {
   if (py_ten->c_ten_env->attach_to == TEN_ENV_ATTACH_TO_ADDON) {
     rc = ten_env_on_configure_done(py_ten->c_ten_env, &err);
   } else {
-    rc = ten_env_proxy_notify(py_ten->c_ten_env_proxy,
-                              ten_env_notify_on_configure_done, NULL, false,
-                              &err);
+    rc = ten_env_proxy_notify_async(py_ten->c_ten_env_proxy,
+                                    ten_env_proxy_notify_on_configure_done,
+                                    NULL, &err);
   }
 
   if (!rc) {
