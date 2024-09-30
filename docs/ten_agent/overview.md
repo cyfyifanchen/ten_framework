@@ -2,6 +2,8 @@
 
 ## About TEN Agent
 
+<figure><img src="https://github.com/TEN-framework/docs/blob/main/assets/gif/features.gif?raw=true" alt=""><figcaption>TEN Agent Features: Voice Vision and RAG</figcaption></figure>
+
 The TEN Agent, built on the TEN framework, is an open-source AI agent project. It can speak, see and access to a knowledge base.
 
 It also serves as a boilerplate for using the TEN framework, offering a great way to fully understand how to use the framework by diving into TEN Agent.
@@ -63,9 +65,8 @@ Starts an agent with the given graph and overridden properties. The started agen
 
 Example:
 
-{% code title=">_ Terminal" %}
 
-```bash
+```shell
 curl 'http://localhost:8080/start' \
 -H 'Content-Type: application/json' \
 --data-raw '{
@@ -81,7 +82,6 @@ curl 'http://localhost:8080/start' \
 }'
 ```
 
-{% endcode %}
 
 ### Stop
 
@@ -94,9 +94,8 @@ Stops the agent that was previously started.
 
 Example:
 
-{% code title=">_ Terminal" %}
 
-```bash
+```shell
 curl 'http://localhost:8080/stop' \
 -H 'Content-Type: application/json' \
 --data-raw '{
@@ -105,7 +104,6 @@ curl 'http://localhost:8080/stop' \
 }'
 ```
 
-{% endcode %}
 
 ### Ping
 
@@ -113,9 +111,8 @@ Sends a ping to the server to indicate the connection is still alive. This is un
 
 Example:
 
-{% code title=">_ Terminal" %}
 
-```bash
+```shell
 curl 'http://localhost:8080/ping' \
 -H 'Content-Type: application/json' \
 --data-raw '{
@@ -124,7 +121,6 @@ curl 'http://localhost:8080/ping' \
 }'
 ```
 
-{% endcode %}
 
 ### Playground
 
@@ -134,7 +130,6 @@ The code to handle audio input/output and transcribed text is in src/manager/rtc
 
 Example of joining a channel:
 
-{% code title=">_ Terminal" %}
 
 ```shell
 async join({ channel, userId }: { channel: string; userId: number }) {
@@ -151,7 +146,6 @@ async join({ channel, userId }: { channel: string; userId: number }) {
 }
 ```
 
-{% endcode %}
 
 
 The text message is transmitted from the agent server to the web app via the Stream Message callback:
