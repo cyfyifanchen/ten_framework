@@ -35,12 +35,14 @@ For instance, if the TEN Agent is running at localhost:3000, you might see outpu
 And once you interact with the TEN Agent, you should then see entries like these:
 
 {% code title=">_Bash" overflow="wrap" %}
+
 ```bash
 [agora_5bnxv1] 09-29 09:35:25.049  7463  7505 I AZURE_TTS_EXTENSION SpeechText@tts.cc:182 task finished for text: [ and the World Cup in Russia.], text_recv_ts: 1727602522313774, read_bytes: 64000, sent_frames: 200, first_frame_latency: 418ms, finish_latency: 568ms, synthesis_first_byte_latency: 413ms, synthesis_finish_latency: 458ms
 [agora_5bnxv1] 09-29 09:35:25.570  7463  7505 I AZURE_TTS_EXTENSION SpeechText@tts.cc:182 task finished for text: [ In tech,], text_recv_ts: 1727602522347918, read_bytes: 29200, sent_frames: 92, first_frame_latency: 427ms, finish_latency: 515ms, synthesis_first_byte_latency: 419ms, synthesis_finish_latency: 460ms
 [agora_5bnxv1] 09-29 09:35:26.502  7463  7505 I AZURE_TTS_EXTENSION SpeechText@tts.cc:182 task finished for text: [ we saw some big advancements like the rise of AI and electric cars becoming more mainstream.], text_recv_ts: 1727602522461866, read_bytes: 178800, sent_frames: 559, first_frame_latency: 510ms, finish_latency: 928ms, synthesis_first_byte_latency: 503ms, synthesis_finish_latency: 800ms
 [agora_5bnxv1] 09-29 09:35:27.029  7463  7505 I AZURE_TTS_EXTENSION SpeechText@tts.cc:182 task finished for text: [ Personally,], text_recv_ts: 1727602522468652, read_bytes: 34400, sent_frames: 108, first_frame_latency: 442ms, finish_latency: 524ms, synthesis_first_byte_latency: 436ms, synthesis_finish_latency: 463ms
 ```
+
 {% endcode %}
 
 When you see logs like this, it means the system is working correctly and logging each sentence you say.
