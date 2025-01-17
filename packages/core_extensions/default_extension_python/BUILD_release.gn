@@ -12,8 +12,8 @@ ten_package("default_extension_python") {
     "__init__.py",
     "addon.py",
     "extension.py",
-    "log.py",
     "manifest.json",
     "property.json",
+    "tests",
   ]
 }

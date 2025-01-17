@@ -20,7 +20,7 @@ bool ten_py_ten_env_check_integrity(ten_py_ten_env_t *self) {
   TEN_ASSERT(self, "Should not happen.");
 
   if (ten_signature_get(&self->signature) !=
-      (ten_signature_t)TEN_PY_TEN_SIGNATURE) {
+      (ten_signature_t)TEN_PY_TEN_ENV_SIGNATURE) {
     return false;
   }
 
@@ -75,7 +75,7 @@ static PyObject *create_actual_py_ten_env_instance(
   return ten_env_instance;
 }
 
-ten_py_ten_env_t *ten_py_ten_wrap(ten_env_t *ten_env) {
+ten_py_ten_env_t *ten_py_ten_env_wrap(ten_env_t *ten_env) {
   TEN_ASSERT(ten_env, "Invalid argument.");
 
   ten_py_ten_env_t *py_ten_env =
@@ -84,14 +84,18 @@ ten_py_ten_env_t *ten_py_ten_wrap(ten_env_t *ten_env) {
     return py_ten_env;
   }
 
-  PyTypeObject *py_ten_py_type = ten_py_ten_env_type();
-  py_ten_env = (ten_py_ten_env_t *)py_ten_py_type->tp_alloc(py_ten_py_type, 0);
+  PyTypeObject *py_ten_env_py_type = ten_py_ten_env_type();
+
+  // Create a new py_ten_env.
+  py_ten_env =
+      (ten_py_ten_env_t *)py_ten_env_py_type->tp_alloc(py_ten_env_py_type, 0);
   TEN_ASSERT(py_ten_env, "Failed to allocate memory.");
 
-  ten_signature_set(&py_ten_env->signature, TEN_PY_TEN_SIGNATURE);
+  ten_signature_set(&py_ten_env->signature, TEN_PY_TEN_ENV_SIGNATURE);
   py_ten_env->c_ten_env = ten_env;
   py_ten_env->c_ten_env_proxy = NULL;
   py_ten_env->need_to_release_gil_state = false;
+  py_ten_env->py_thread_state = NULL;
 
   py_ten_env->actual_py_ten_env = create_actual_py_ten_env_instance(py_ten_env);
   if (!py_ten_env->actual_py_ten_env) {
@@ -113,15 +117,15 @@ static PyObject *ten_py_ten_env_get_attach_to(ten_py_ten_env_t *self,
   return PyLong_FromLong(self->c_ten_env->attach_to);
 }
 
-void ten_py_ten_env_invalidate(ten_py_ten_env_t *py_ten) {
-  TEN_ASSERT(py_ten, "Should not happen.");
+void ten_py_ten_env_invalidate(ten_py_ten_env_t *py_ten_env) {
+  TEN_ASSERT(py_ten_env, "Should not happen.");
 
-  if (py_ten->actual_py_ten_env) {
-    Py_DECREF(py_ten->actual_py_ten_env);
-    py_ten->actual_py_ten_env = NULL;
+  if (py_ten_env->actual_py_ten_env) {
+    Py_DECREF(py_ten_env->actual_py_ten_env);
+    py_ten_env->actual_py_ten_env = NULL;
   }
 
-  Py_DECREF(py_ten);
+  Py_DECREF(py_ten_env);
 }
 
 static void ten_py_ten_env_destroy(PyObject *self) {
@@ -146,7 +150,6 @@ PyTypeObject *ten_py_ten_env_type(void) {
       {"send_data", ten_py_ten_env_send_data, METH_VARARGS, NULL},
       {"send_video_frame", ten_py_ten_env_send_video_frame, METH_VARARGS, NULL},
       {"send_audio_frame", ten_py_ten_env_send_audio_frame, METH_VARARGS, NULL},
-      {"send_json", ten_py_ten_env_send_json, METH_VARARGS, NULL},
       {"get_property_to_json", ten_py_ten_env_get_property_to_json,
        METH_VARARGS, NULL},
       {"set_property_from_json", ten_py_ten_env_set_property_from_json,
@@ -170,7 +173,6 @@ PyTypeObject *ten_py_ten_env_type(void) {
        NULL},
       {"is_property_exist", ten_py_ten_env_is_property_exist, METH_VARARGS,
        NULL},
-      {"is_cmd_connected", ten_py_ten_env_is_cmd_connected, METH_VARARGS, NULL},
       {"init_property_from_json", ten_py_ten_env_init_property_from_json,
        METH_VARARGS, NULL},
       {"log", ten_py_ten_env_log, METH_VARARGS, NULL},

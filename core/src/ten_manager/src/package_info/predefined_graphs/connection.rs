@@ -4,47 +4,47 @@
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
 //
-use crate::dev_server::graphs::connections::{
-    DevServerConnection, DevServerDestination, DevServerMessageFlow,
-};
 use ten_rust::pkg_info::graph::{
     GraphConnection, GraphDestination, GraphMessageFlow,
 };
 
-impl From<DevServerConnection> for GraphConnection {
-    fn from(dev_server_connection: DevServerConnection) -> Self {
-        GraphConnection {
-            app: dev_server_connection.app,
-            extension_group: dev_server_connection.extension_group,
-            extension: dev_server_connection.extension,
+use crate::designer::graphs::connections::{
+    DesignerConnection, DesignerDestination, DesignerMessageFlow,
+};
 
-            cmd: dev_server_connection
+impl From<DesignerConnection> for GraphConnection {
+    fn from(designer_connection: DesignerConnection) -> Self {
+        GraphConnection {
+            app: Some(designer_connection.app),
+            extension: designer_connection.extension,
+
+            cmd: designer_connection
                 .cmd
-                .map(get_property_msg_flow_from_dev_server),
-            data: dev_server_connection
+                .map(get_property_msg_flow_from_designer),
+            data: designer_connection
                 .data
-                .map(get_property_msg_flow_from_dev_server),
-            audio_frame: dev_server_connection
+                .map(get_property_msg_flow_from_designer),
+            audio_frame: designer_connection
                 .audio_frame
-                .map(get_property_msg_flow_from_dev_server),
-            video_frame: dev_server_connection
+                .map(get_property_msg_flow_from_designer),
+            video_frame: designer_connection
                 .video_frame
-                .map(get_property_msg_flow_from_dev_server),
+                .map(get_property_msg_flow_from_designer),
         }
     }
 }
 
-fn get_property_msg_flow_from_dev_server(
-    msg_flow: Vec<DevServerMessageFlow>,
+fn get_property_msg_flow_from_designer(
+    msg_flow: Vec<DesignerMessageFlow>,
 ) -> Vec<GraphMessageFlow> {
     msg_flow.into_iter().map(|v| v.into()).collect()
 }
 
-impl From<DevServerMessageFlow> for GraphMessageFlow {
-    fn from(dev_server_msg_flow: DevServerMessageFlow) -> Self {
+impl From<DesignerMessageFlow> for GraphMessageFlow {
+    fn from(designer_msg_flow: DesignerMessageFlow) -> Self {
         GraphMessageFlow {
-            name: dev_server_msg_flow.name,
-            dest: dev_server_msg_flow
+            name: designer_msg_flow.name,
+            dest: designer_msg_flow
                 .dest
                 .into_iter()
                 .map(|d| d.into())
@@ -53,12 +53,12 @@ impl From<DevServerMessageFlow> for GraphMessageFlow {
     }
 }
 
-impl From<DevServerDestination> for GraphDestination {
-    fn from(dev_server_destination: DevServerDestination) -> Self {
+impl From<DesignerDestination> for GraphDestination {
+    fn from(designer_destination: DesignerDestination) -> Self {
         GraphDestination {
-            app: dev_server_destination.app,
-            extension_group: dev_server_destination.extension_group,
-            extension: dev_server_destination.extension,
+            app: Some(designer_destination.app),
+            extension: designer_destination.extension,
+            msg_conversion: designer_destination.msg_conversion,
         }
     }
 }

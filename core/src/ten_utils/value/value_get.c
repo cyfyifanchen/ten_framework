@@ -8,15 +8,17 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "ten_utils/macro/check.h"
 #include "ten_runtime/common/errno.h"
 #include "ten_utils/container/list.h"
 #include "ten_utils/container/list_node.h"
 #include "ten_utils/lib/error.h"
 #include "ten_utils/lib/string.h"
+#include "ten_utils/log/log.h"
+#include "ten_utils/macro/check.h"
 #include "ten_utils/value/type.h"
 #include "ten_utils/value/type_operation.h"
 #include "ten_utils/value/value.h"
+#include "ten_utils/value/value_is.h"
 #include "ten_utils/value/value_kv.h"
 
 int8_t ten_value_get_int8(ten_value_t *self, ten_error_t *err) {
@@ -36,32 +38,38 @@ int8_t ten_value_get_int8(ten_value_t *self, ten_error_t *err) {
       if (self->content.int16 >= -INT8_MAX && self->content.int16 <= INT8_MAX) {
         return (int8_t)self->content.int16;
       }
+      break;
     case TEN_TYPE_INT32:
       if (self->content.int32 >= -INT8_MAX && self->content.int32 <= INT8_MAX) {
         return (int8_t)self->content.int32;
       }
+      break;
     case TEN_TYPE_INT64:
       if (self->content.int64 >= -INT8_MAX && self->content.int64 <= INT8_MAX) {
         return (int8_t)self->content.int64;
       }
+      break;
     case TEN_TYPE_UINT8:
       if (self->content.uint8 <= INT8_MAX) {
         return (int8_t)self->content.uint8;
       }
+      break;
     case TEN_TYPE_UINT16:
       if (self->content.uint16 <= INT8_MAX) {
         return (int8_t)self->content.uint16;
       }
+      break;
     case TEN_TYPE_UINT32:
       if (self->content.uint32 <= INT8_MAX) {
         return (int8_t)self->content.uint32;
       }
+      break;
     case TEN_TYPE_UINT64:
       if (self->content.uint64 <= INT8_MAX) {
         return (int8_t)self->content.uint64;
       }
+      break;
     default:
-      TEN_ASSERT(0, "Should not happen.");
       break;
   }
 
@@ -93,27 +101,31 @@ int16_t ten_value_get_int16(ten_value_t *self, ten_error_t *err) {
           self->content.int32 <= INT16_MAX) {
         return (int16_t)self->content.int32;
       }
+      break;
     case TEN_TYPE_INT64:
       if (self->content.int64 >= -INT16_MAX &&
           self->content.int64 <= INT16_MAX) {
         return (int16_t)self->content.int64;
       }
+      break;
     case TEN_TYPE_UINT8:
       return (int16_t)self->content.uint8;
     case TEN_TYPE_UINT16:
       if (self->content.uint16 <= INT16_MAX) {
         return (int16_t)self->content.uint16;
       }
+      break;
     case TEN_TYPE_UINT32:
       if (self->content.uint32 <= INT16_MAX) {
         return (int16_t)self->content.uint32;
       }
+      break;
     case TEN_TYPE_UINT64:
       if (self->content.uint64 <= INT16_MAX) {
         return (int16_t)self->content.uint64;
       }
+      break;
     default:
-      TEN_ASSERT(0, "Should not happen.");
       break;
   }
 
@@ -147,6 +159,7 @@ int32_t ten_value_get_int32(ten_value_t *self, ten_error_t *err) {
           self->content.int64 <= INT32_MAX) {
         return (int32_t)self->content.int64;
       }
+      break;
     case TEN_TYPE_UINT8:
       return self->content.uint8;
     case TEN_TYPE_UINT16:
@@ -155,12 +168,13 @@ int32_t ten_value_get_int32(ten_value_t *self, ten_error_t *err) {
       if (self->content.uint32 <= INT32_MAX) {
         return (int32_t)self->content.uint32;
       }
+      break;
     case TEN_TYPE_UINT64:
       if (self->content.uint64 <= INT32_MAX) {
         return (int32_t)self->content.uint64;
       }
+      break;
     default:
-      TEN_ASSERT(0, "Should not happen.");
       break;
   }
 
@@ -201,8 +215,8 @@ int64_t ten_value_get_int64(ten_value_t *self, ten_error_t *err) {
       if (self->content.uint64 <= INT64_MAX) {
         return (int64_t)self->content.uint64;
       }
+      break;
     default:
-      TEN_ASSERT(0, "Should not happen.");
       break;
   }
 
@@ -231,32 +245,38 @@ uint8_t ten_value_get_uint8(ten_value_t *self, ten_error_t *err) {
       if (self->content.uint64 <= UINT8_MAX) {
         return (uint8_t)self->content.uint16;
       }
+      break;
     case TEN_TYPE_UINT32:
       if (self->content.uint64 <= UINT8_MAX) {
         return (uint8_t)self->content.uint32;
       }
+      break;
     case TEN_TYPE_UINT64:
       if (self->content.uint64 <= UINT8_MAX) {
         return (uint8_t)self->content.uint64;
       }
+      break;
     case TEN_TYPE_INT8:
       if (self->content.int8 >= 0) {
         return (uint8_t)self->content.int8;
       }
+      break;
     case TEN_TYPE_INT16:
       if (self->content.int16 >= 0 && self->content.int16 <= UINT8_MAX) {
         return (uint8_t)self->content.int16;
       }
+      break;
     case TEN_TYPE_INT32:
       if (self->content.int32 >= 0 && self->content.int32 <= UINT8_MAX) {
         return (uint8_t)self->content.int32;
       }
+      break;
     case TEN_TYPE_INT64:
       if (self->content.int64 >= 0 && self->content.int64 <= UINT8_MAX) {
         return (uint8_t)self->content.int64;
       }
+      break;
     default:
-      TEN_ASSERT(0, "Should not happen.");
       break;
   }
 
@@ -287,28 +307,33 @@ uint16_t ten_value_get_uint16(ten_value_t *self, ten_error_t *err) {
       if (self->content.uint64 <= UINT16_MAX) {
         return (uint16_t)self->content.uint32;
       }
+      break;
     case TEN_TYPE_UINT64:
       if (self->content.uint64 <= UINT16_MAX) {
         return (uint16_t)self->content.uint64;
       }
+      break;
     case TEN_TYPE_INT8:
       if (self->content.int8 >= 0) {
         return (uint16_t)self->content.int8;
       }
+      break;
     case TEN_TYPE_INT16:
       if (self->content.int16 >= 0) {
         return (uint16_t)self->content.int16;
       }
+      break;
     case TEN_TYPE_INT32:
       if (self->content.int32 >= 0 && self->content.int64 <= UINT16_MAX) {
         return (uint16_t)self->content.int32;
       }
+      break;
     case TEN_TYPE_INT64:
       if (self->content.int64 >= 0 && self->content.int64 <= UINT16_MAX) {
         return (uint16_t)self->content.int64;
       }
+      break;
     default:
-      TEN_ASSERT(0, "Should not happen.");
       break;
   }
 
@@ -341,24 +366,28 @@ uint32_t ten_value_get_uint32(ten_value_t *self, ten_error_t *err) {
       if (self->content.uint64 <= UINT32_MAX) {
         return (uint32_t)self->content.uint64;
       }
+      break;
     case TEN_TYPE_INT8:
       if (self->content.int8 >= 0) {
         return (uint32_t)self->content.int8;
       }
+      break;
     case TEN_TYPE_INT16:
       if (self->content.int16 >= 0) {
         return (uint32_t)self->content.int16;
       }
+      break;
     case TEN_TYPE_INT32:
       if (self->content.int32 >= 0) {
         return (uint32_t)self->content.int32;
       }
+      break;
     case TEN_TYPE_INT64:
       if (self->content.int64 >= 0 && self->content.int64 <= UINT32_MAX) {
         return (uint32_t)self->content.int64;
       }
+      break;
     default:
-      TEN_ASSERT(0, "Should not happen.");
       break;
   }
 
@@ -393,20 +422,23 @@ uint64_t ten_value_get_uint64(ten_value_t *self, ten_error_t *err) {
       if (self->content.int8 >= 0) {
         return (uint64_t)self->content.int8;
       }
+      break;
     case TEN_TYPE_INT16:
       if (self->content.int16 >= 0) {
         return (uint64_t)self->content.int16;
       }
+      break;
     case TEN_TYPE_INT32:
       if (self->content.int32 >= 0) {
         return (uint64_t)self->content.int32;
       }
+      break;
     case TEN_TYPE_INT64:
       if (self->content.int64 >= 0) {
         return (uint64_t)self->content.int64;
       }
+      break;
     default:
-      TEN_ASSERT(0, "Should not happen.");
       break;
   }
 
@@ -436,8 +468,8 @@ float ten_value_get_float32(ten_value_t *self, ten_error_t *err) {
           self->content.float64 <= FLT_MAX) {
         return (float)self->content.float64;
       }
+      break;
     default:
-      TEN_ASSERT(0, "Should not happen.");
       return 0.0F;
   }
 
@@ -465,7 +497,6 @@ double ten_value_get_float64(ten_value_t *self, ten_error_t *err) {
     case TEN_TYPE_FLOAT64:
       return self->content.float64;
     default:
-      TEN_ASSERT(0, "Should not happen.");
       break;
   }
 
@@ -543,7 +574,20 @@ ten_list_t *ten_value_peek_array(ten_value_t *self) {
   return NULL;
 }
 
-const char *ten_value_peek_string(ten_value_t *self) {
+ten_list_t *ten_value_peek_object(ten_value_t *self) {
+  if (!self) {
+    return NULL;
+  }
+
+  TEN_ASSERT(ten_value_check_integrity(self), "Invalid argument.");
+
+  if (ten_value_is_object(self)) {
+    return &self->content.object;
+  }
+  return NULL;
+}
+
+ten_string_t *ten_value_peek_string(ten_value_t *self) {
   if (!self) {
     return NULL;
   }
@@ -551,14 +595,13 @@ const char *ten_value_peek_string(ten_value_t *self) {
   TEN_ASSERT(ten_value_check_integrity(self), "Invalid argument.");
 
   if (ten_value_is_string(self)) {
-    return ten_string_get_raw_str(&self->content.string);
+    return &self->content.string;
   } else {
     return NULL;
   }
 }
 
-// TODO(Liu): add error context.
-const char *ten_value_peek_c_str(ten_value_t *self) {
+const char *ten_value_peek_raw_str(ten_value_t *self, ten_error_t *err) {
   if (!self) {
     return NULL;
   }
@@ -576,12 +619,22 @@ TEN_TYPE ten_value_get_type(ten_value_t *self) {
   return self->type;
 }
 
-ten_value_t *ten_value_array_peek(ten_value_t *self, size_t index) {
+ten_value_t *ten_value_array_peek(ten_value_t *self, size_t index,
+                                  ten_error_t *err) {
   if (!self) {
     return NULL;
   }
 
   TEN_ASSERT(ten_value_check_integrity(self), "Invalid argument.");
+
+  if (!ten_value_is_array(self)) {
+    if (err) {
+      ten_error_set(err, TEN_ERRNO_GENERIC,
+                    "The conversion from %s to array is unfit.",
+                    ten_type_to_string(self->type));
+    }
+    return NULL;
+  }
 
   if (index >= ten_list_size(&self->content.array)) {
     return NULL;
@@ -593,6 +646,6 @@ ten_value_t *ten_value_array_peek(ten_value_t *self, size_t index) {
     }
   }
 
-  TEN_ASSERT(0, "Invalid argument.");
+  TEN_ASSERT(0, "Should not happen.");
   return NULL;
 }

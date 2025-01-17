@@ -14,8 +14,8 @@
 #include "include_internal/ten_runtime/msg/cmd_base/cmd_result/cmd.h"
 #include "include_internal/ten_runtime/msg/msg.h"
 #include "include_internal/ten_runtime/msg/msg_info.h"
-#include "include_internal/ten_runtime/msg_conversion/msg_conversion/msg_and_result_conversion.h"
-#include "include_internal/ten_runtime/msg_conversion/msg_conversion/msg_conversion.h"
+#include "include_internal/ten_runtime/msg_conversion/msg_and_its_result_conversion.h"
+#include "include_internal/ten_runtime/msg_conversion/msg_conversion_context.h"
 #include "include_internal/ten_runtime/path/common.h"
 #include "include_internal/ten_runtime/path/path.h"
 #include "include_internal/ten_runtime/path/path_group.h"
@@ -40,10 +40,10 @@ static void ten_extension_cache_cmd_result_to_in_path_for_auto_return(
   TEN_LOGV(
       "[%s] Receives a cmd result (%p) for '%s', and will cache it to do some "
       "post processing later.",
-      ten_extension_get_name(extension), ten_shared_ptr_get_data(cmd),
+      ten_extension_get_name(extension, true), ten_shared_ptr_get_data(cmd),
       ten_msg_type_to_string(ten_cmd_result_get_original_cmd_type(cmd)));
 
-  ten_msg_dump(cmd, NULL, "The received cmd result: ^m");
+  // ten_msg_dump(cmd, NULL, "The received cmd result: ^m");
 
   ten_path_t *in_path =
       (ten_path_t *)ten_extension_get_cmd_return_path_from_itself(
@@ -84,7 +84,7 @@ void ten_extension_handle_in_msg(ten_extension_t *self, ten_shared_ptr_t *msg) {
 
   bool msg_is_cmd_result = ten_msg_is_cmd_result(msg);
 
-  if (self->state < TEN_EXTENSION_STATE_ON_START && !msg_is_cmd_result) {
+  if (self->state < TEN_EXTENSION_STATE_ON_START_DONE && !msg_is_cmd_result) {
     // The extension is not initialized, and the msg is not a cmd result, so
     // cache the msg to the pending list.
     ten_list_push_smart_ptr_back(&self->pending_msgs, msg);
@@ -112,7 +112,7 @@ void ten_extension_handle_in_msg(ten_extension_t *self, ten_shared_ptr_t *msg) {
     } else {
       TEN_ASSERT(ten_path_check_integrity(out_path, true), "Invalid argument.");
 
-      bool is_final_result = ten_cmd_result_get_is_final(msg, &err);
+      bool is_final_result = ten_cmd_result_is_final(msg, &err);
 
       // If a non-final result is received, it indicates the use of streaming
       // result mode. Currently, the TEN runtime does not support using
@@ -152,7 +152,6 @@ void ten_extension_handle_in_msg(ten_extension_t *self, ten_shared_ptr_t *msg) {
         // TODO(Xilin): Currently, there is no mechanism for auto return, so the
         // relevant codes should be able to be disabled.
         ten_extension_cache_cmd_result_to_in_path_for_auto_return(self, msg);
-
         delete_msg = true;
       }
     }
@@ -171,9 +170,9 @@ void ten_extension_handle_in_msg(ten_extension_t *self, ten_shared_ptr_t *msg) {
       // If there is no message conversions exist, put the original command to
       // the list directly.
       self->extension_info &&
-      ten_list_size(&self->extension_info->msg_conversions) > 0;
+      ten_list_size(&self->extension_info->msg_conversion_contexts) > 0;
 
-  // The type of elements is 'ten_msg_and_result_conversion_t'.
+  // The type of elements is 'ten_msg_and_its_result_conversion_t'.
   ten_list_t converted_msgs = TEN_LIST_INIT_VAL;
 
   if (should_this_msg_do_msg_conversion) {
@@ -182,14 +181,15 @@ void ten_extension_handle_in_msg(ten_extension_t *self, ten_shared_ptr_t *msg) {
     ten_error_init(&err);
     if (!ten_extension_convert_msg(self, msg, &converted_msgs, &err)) {
       TEN_LOGE("[%s] Failed to convert msg %s: %s",
-               ten_extension_get_name(self), ten_msg_get_name(msg),
+               ten_extension_get_name(self, true), ten_msg_get_name(msg),
                ten_error_errmsg(&err));
     }
     ten_error_deinit(&err);
   } else {
-    ten_list_push_ptr_back(
-        &converted_msgs, ten_msg_and_result_conversion_create(msg, NULL),
-        (ten_ptr_listnode_destroy_func_t)ten_msg_and_result_conversion_destroy);
+    ten_list_push_ptr_back(&converted_msgs,
+                           ten_msg_and_its_result_conversion_create(msg, NULL),
+                           (ten_ptr_listnode_destroy_func_t)
+                               ten_msg_and_its_result_conversion_destroy);
   }
 
   // Get the actual messages which should be sent to the extension. Handle those
@@ -198,10 +198,8 @@ void ten_extension_handle_in_msg(ten_extension_t *self, ten_shared_ptr_t *msg) {
   if (!msg_is_cmd_result) {
     // Create the corresponding IN paths for the input commands.
 
-    ten_list_t in_paths = TEN_LIST_INIT_VAL;
-
     ten_list_foreach (&converted_msgs, iter) {
-      ten_msg_and_result_conversion_t *msg_and_result_conversion =
+      ten_msg_and_its_result_conversion_t *msg_and_result_conversion =
           ten_ptr_listnode_get(iter.node);
       TEN_ASSERT(msg_and_result_conversion, "Invalid argument.");
 
@@ -212,24 +210,12 @@ void ten_extension_handle_in_msg(ten_extension_t *self, ten_shared_ptr_t *msg) {
       if (ten_msg_is_cmd(actual_cmd)) {
         if (ten_msg_info[ten_msg_get_type(actual_cmd)].create_in_path) {
           // Add a path entry to the IN path table of this extension.
-          ten_path_t *in_path = (ten_path_t *)ten_path_table_add_in_path(
+          ten_path_table_add_in_path(
               self->path_table, actual_cmd,
-              msg_and_result_conversion->operation);
-
-          ten_list_push_ptr_back(&in_paths, in_path, NULL);
+              msg_and_result_conversion->result_conversion);
         }
       }
     }
-
-    if (ten_list_size(&in_paths) > 1) {
-      // Create a path group in this case.
-
-      ten_paths_create_group(
-          &in_paths,
-          TEN_PATH_GROUP_POLICY_ONE_FAIL_RETURN_AND_ALL_OK_RETURN_LAST);
-    }
-
-    ten_list_clear(&in_paths);
   }
 
   // The path table processing is completed, it's time to check the schema. And
@@ -239,7 +225,7 @@ void ten_extension_handle_in_msg(ten_extension_t *self, ten_shared_ptr_t *msg) {
   // guaranteed by the conversions.
   bool pass_schema_check = true;
   ten_list_foreach (&converted_msgs, iter) {
-    ten_msg_and_result_conversion_t *msg_and_result_conversion =
+    ten_msg_and_its_result_conversion_t *msg_and_result_conversion =
         ten_ptr_listnode_get(iter.node);
     TEN_ASSERT(msg_and_result_conversion, "Invalid argument.");
 
@@ -258,7 +244,7 @@ void ten_extension_handle_in_msg(ten_extension_t *self, ten_shared_ptr_t *msg) {
     // the extension.
 
     ten_list_foreach (&converted_msgs, iter) {
-      ten_msg_and_result_conversion_t *msg_and_result_conversion =
+      ten_msg_and_its_result_conversion_t *msg_and_result_conversion =
           ten_ptr_listnode_get(iter.node);
       TEN_ASSERT(msg_and_result_conversion, "Invalid argument.");
 
@@ -273,12 +259,13 @@ void ten_extension_handle_in_msg(ten_extension_t *self, ten_shared_ptr_t *msg) {
       ten_msg_clear_dest(actual_msg);
 
       if (ten_msg_get_type(actual_msg) == TEN_MSG_TYPE_CMD_RESULT) {
-        ten_env_cmd_result_handler_func_t result_handler =
+        ten_env_msg_result_handler_func_t result_handler =
             ten_cmd_base_get_raw_cmd_base(actual_msg)->result_handler;
         if (result_handler) {
           result_handler(
-              self, self->ten_env, actual_msg,
-              ten_cmd_base_get_raw_cmd_base(actual_msg)->result_handler_data);
+              self->ten_env, actual_msg,
+              ten_cmd_base_get_raw_cmd_base(actual_msg)->result_handler_data,
+              NULL);
         } else {
           // If the cmd result does not have an associated result handler,
           // TEN runtime will return the cmd result to the upstream extension
@@ -295,7 +282,8 @@ void ten_extension_handle_in_msg(ten_extension_t *self, ten_shared_ptr_t *msg) {
           // ExtensionB only needs to send the received cmdA to ExtensionC and
           // does not need to handle the result of cmdA. The TEN runtime will
           // help ExtensionB to return the result of cmdA to ExtensionA.
-          ten_env_return_result_directly(self->ten_env, actual_msg, NULL);
+          ten_env_return_result_directly(self->ten_env, actual_msg, NULL, NULL,
+                                         NULL);
         }
       } else {
         switch (ten_msg_get_type(msg)) {

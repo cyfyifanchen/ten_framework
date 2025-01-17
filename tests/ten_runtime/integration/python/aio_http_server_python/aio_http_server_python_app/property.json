@@ -3,19 +3,9 @@
     "log_level": 2,
     "predefined_graphs": [
       {
-        "name": "0",
+        "name": "default",
         "auto_start": true,
         "nodes": [
-          {
-            "type": "extension_group",
-            "name": "default_extension_group",
-            "addon": "default_extension_group"
-          },
-          {
-            "type": "extension_group",
-            "name": "test",
-            "addon": "default_extension_group"
-          },
           {
             "type": "extension",
             "name": "aio_http_server_python",
@@ -34,14 +24,12 @@
         ],
         "connections": [
           {
-            "extension_group": "test",
             "extension": "aio_http_server_python",
             "cmd": [
               {
                 "name": "test",
                 "dest": [
                   {
-                    "extension_group": "default_extension_group",
                     "extension": "simple_echo_cpp"
                   }
                 ]

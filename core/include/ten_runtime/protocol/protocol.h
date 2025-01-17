@@ -19,7 +19,6 @@ typedef struct ten_app_t ten_app_t;
 typedef struct ten_engine_t ten_engine_t;
 typedef struct ten_addon_host_t ten_addon_host_t;
 typedef struct ten_runloop_t ten_runloop_t;
-typedef struct ten_protocol_context_store_t ten_protocol_context_store_t;
 
 // The protocols will be created in the following scenarios:
 // - A listening protocol when the app acts as a server.
@@ -112,17 +111,19 @@ typedef void (*ten_protocol_close_func_t)(ten_protocol_t *self);
 typedef void (*ten_protocol_on_output_func_t)(ten_protocol_t *self,
                                               ten_list_t *output);
 
-typedef void (*ten_protocol_listen_func_t)(ten_protocol_t *self,
-                                           const char *uri);
+typedef ten_connection_t *(*ten_protocol_on_client_accepted_func_t)(
+    ten_protocol_t *self, ten_protocol_t *new_protocol);
 
-typedef ten_connection_t *(*ten_protocol_on_accepted_func_t)(
-    ten_protocol_t *new_protocol);
+typedef void (*ten_protocol_listen_func_t)(
+    ten_protocol_t *self, const char *uri,
+    ten_protocol_on_client_accepted_func_t on_client_accepted);
 
-typedef bool (*ten_protocol_connect_to_func_t)(ten_protocol_t *self,
-                                               const char *uri);
+typedef void (*ten_protocol_on_server_connected_func_t)(ten_protocol_t *self,
+                                                        bool success);
 
-typedef void (*ten_protocol_on_connected_func_t)(ten_protocol_t *self,
-                                                 bool success);
+typedef void (*ten_protocol_connect_to_func_t)(
+    ten_protocol_t *self, const char *uri,
+    ten_protocol_on_server_connected_func_t on_server_connected);
 
 typedef void (*ten_protocol_migrate_func_t)(ten_protocol_t *self,
                                             ten_engine_t *engine,
@@ -163,13 +164,6 @@ typedef struct ten_protocol_t ten_protocol_t;
 TEN_RUNTIME_API bool ten_protocol_check_integrity(ten_protocol_t *self,
                                                   bool check_thread);
 
-/**
- * @param uri Server uri
- * @param tags Protocol tags, all of tags MUST match.
- */
-TEN_RUNTIME_API ten_protocol_t *ten_protocol_create(const char *uri,
-                                                    TEN_PROTOCOL_ROLE role);
-
 TEN_RUNTIME_API void ten_protocol_init(
     ten_protocol_t *self, const char *name, ten_protocol_close_func_t close,
     ten_protocol_on_output_func_t on_output, ten_protocol_listen_func_t listen,
@@ -193,7 +187,6 @@ TEN_RUNTIME_API void ten_protocol_send_msg(ten_protocol_t *self,
 TEN_RUNTIME_API ten_runloop_t *ten_protocol_get_attached_runloop(
     ten_protocol_t *self);
 
-TEN_RUNTIME_API ten_protocol_context_store_t *ten_protocol_get_context_store(
-    ten_protocol_t *self);
-
 TEN_RUNTIME_API bool ten_protocol_role_is_communication(ten_protocol_t *self);
+
+TEN_RUNTIME_API bool ten_protocol_role_is_listening(ten_protocol_t *self);

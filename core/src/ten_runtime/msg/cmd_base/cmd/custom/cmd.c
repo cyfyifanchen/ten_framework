@@ -4,20 +4,18 @@
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
 //
-#include "ten_runtime/msg/cmd/custom/cmd.h"
+#include "include_internal/ten_runtime/msg/cmd_base/cmd/cmd.h"
 
 #include <stdlib.h>
 #include <string.h>
 
 #include "include_internal/ten_runtime/common/constant_str.h"
-#include "include_internal/ten_runtime/msg/cmd_base/cmd/cmd.h"
 #include "include_internal/ten_runtime/msg/cmd_base/cmd/custom/cmd.h"
 #include "include_internal/ten_runtime/msg/cmd_base/cmd/custom/field/field_info.h"
 #include "include_internal/ten_runtime/msg/field/field_info.h"
 #include "include_internal/ten_runtime/msg/msg.h"
-#include "ten_utils/macro/check.h"
 #include "include_internal/ten_utils/value/value_path.h"
-#include "ten_runtime/common/errno.h"
+#include "include_internal/ten_utils/value/value_set.h"
 #include "ten_utils/container/list.h"
 #include "ten_utils/container/list_node.h"
 #include "ten_utils/lib/alloc.h"
@@ -25,7 +23,7 @@
 #include "ten_utils/lib/json.h"
 #include "ten_utils/lib/smart_ptr.h"
 #include "ten_utils/lib/string.h"
-#include "ten_utils/macro/mark.h"
+#include "ten_utils/macro/check.h"
 #include "ten_utils/value/value.h"
 
 static void ten_raw_cmd_custom_destroy(ten_cmd_t *self) {
@@ -58,105 +56,43 @@ ten_shared_ptr_t *ten_cmd_custom_create_empty(void) {
                                ten_raw_cmd_custom_destroy);
 }
 
-ten_cmd_t *ten_raw_cmd_custom_create(const char *cmd_name) {
-  TEN_ASSERT(cmd_name, "Should not happen.");
+ten_cmd_t *ten_raw_cmd_custom_create(const char *name, ten_error_t *err) {
+  TEN_ASSERT(name, "Should not happen.");
 
   ten_cmd_t *cmd = ten_raw_cmd_custom_create_empty();
   TEN_ASSERT(cmd && ten_raw_cmd_check_integrity(cmd), "Should not happen.");
 
-  ten_raw_msg_set_name((ten_msg_t *)cmd, cmd_name, NULL);
+  ten_raw_msg_set_name((ten_msg_t *)cmd, name, err);
 
   return cmd;
 }
 
-ten_shared_ptr_t *ten_cmd_custom_create(const char *cmd_name) {
-  TEN_ASSERT(cmd_name, "Should not happen.");
-
-  ten_cmd_t *cmd = ten_raw_cmd_custom_create(cmd_name);
-  return ten_shared_ptr_create(cmd, ten_raw_cmd_custom_destroy);
-}
-
-static bool ten_raw_cmd_custom_init_from_json(ten_cmd_t *self, ten_json_t *json,
-                                              TEN_UNUSED ten_error_t *err) {
-  TEN_ASSERT(self && ten_raw_cmd_check_integrity((ten_cmd_t *)self),
-             "Should not happen.");
-  TEN_ASSERT(json && ten_json_check_integrity(json), "Should not happen.");
-
-  for (size_t i = 0; i < ten_cmd_custom_fields_info_size; ++i) {
-    ten_msg_get_field_from_json_func_t get_field_from_json =
-        ten_cmd_custom_fields_info[i].get_field_from_json;
-    if (get_field_from_json) {
-      if (!get_field_from_json((ten_msg_t *)self, json, err)) {
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
-
-bool ten_raw_cmd_custom_as_msg_init_from_json(ten_msg_t *self, ten_json_t *json,
-                                              ten_error_t *err) {
-  TEN_ASSERT(self && ten_raw_cmd_check_integrity((ten_cmd_t *)self),
-             "Should not happen.");
-  TEN_ASSERT(json && ten_json_check_integrity(json), "Should not happen.");
-
-  return ten_raw_cmd_custom_init_from_json((ten_cmd_t *)self, json, err);
-}
-
-ten_cmd_t *ten_raw_cmd_custom_create_from_json(ten_json_t *json,
-                                               ten_error_t *err) {
-  TEN_ASSERT(json, "Should not happen.");
+static ten_cmd_t *ten_raw_cmd_custom_create_with_name_len(const char *name,
+                                                          size_t name_len,
+                                                          ten_error_t *err) {
+  TEN_ASSERT(name, "Should not happen.");
 
   ten_cmd_t *cmd = ten_raw_cmd_custom_create_empty();
-  TEN_ASSERT(cmd && ten_raw_cmd_check_integrity((ten_cmd_t *)cmd),
-             "Should not happen.");
+  TEN_ASSERT(cmd && ten_raw_cmd_check_integrity(cmd), "Should not happen.");
 
-  if (!ten_raw_cmd_custom_init_from_json(cmd, json, err)) {
-    ten_raw_cmd_custom_destroy(cmd);
-    return NULL;
-  }
+  ten_raw_msg_set_name_with_len((ten_msg_t *)cmd, name, name_len, err);
 
   return cmd;
 }
 
-ten_msg_t *ten_raw_cmd_custom_as_msg_create_from_json(ten_json_t *json,
-                                                      ten_error_t *err) {
-  TEN_ASSERT(json, "Should not happen.");
-
-  return (ten_msg_t *)ten_raw_cmd_custom_create_from_json(json, err);
+ten_shared_ptr_t *ten_cmd_custom_create(const char *name, ten_error_t *err) {
+  TEN_ASSERT(name, "Should not happen.");
+  return ten_shared_ptr_create(ten_raw_cmd_custom_create(name, err),
+                               ten_raw_cmd_custom_destroy);
 }
 
-// This hack is only used by msgpack when serializing/deserializing the connect
-// command. Eventually, we should remove this hack.
-static void ten_raw_cmd_custom_to_json_msgpack_serialization_hack(
-    ten_msg_t *self, ten_json_t *json) {
-  TEN_ASSERT(self && ten_raw_cmd_check_integrity((ten_cmd_t *)self) &&
-                 ten_raw_msg_get_type(self) == TEN_MSG_TYPE_CMD,
-             "Should not happen.");
-  TEN_ASSERT(json, "Should not happen.");
-
-  ten_value_t *json_value =
-      ten_raw_msg_peek_property(self, TEN_STR_MSGPACK_SERIALIZATION_HACK, NULL);
-  if (json_value) {
-    // If there is a 'json' attached to this custom command, add all the
-    // fields in that json to the json returned.
-
-    ten_json_t *payload_json =
-        ten_json_from_string(ten_value_peek_c_str(json_value), NULL);
-    TEN_ASSERT(ten_json_check_integrity(payload_json), "Should not happen.");
-
-    ten_json_object_update_missing(json, payload_json);
-
-    if (ten_json_object_peek(payload_json, TEN_STR_NAME)) {
-      ten_json_object_set_new(
-          json, TEN_STR_NAME,
-          ten_json_create_string(
-              ten_json_object_peek_string(payload_json, TEN_STR_NAME)));
-    }
-
-    ten_json_destroy(payload_json);
-  }
+ten_shared_ptr_t *ten_cmd_custom_create_with_name_len(const char *name,
+                                                      size_t name_len,
+                                                      ten_error_t *err) {
+  TEN_ASSERT(name, "Should not happen.");
+  return ten_shared_ptr_create(
+      ten_raw_cmd_custom_create_with_name_len(name, name_len, err),
+      ten_raw_cmd_custom_destroy);
 }
 
 ten_json_t *ten_raw_cmd_custom_to_json(ten_msg_t *self, ten_error_t *err) {
@@ -167,18 +103,11 @@ ten_json_t *ten_raw_cmd_custom_to_json(ten_msg_t *self, ten_error_t *err) {
   ten_json_t *json = ten_json_create_object();
   TEN_ASSERT(json, "Should not happen.");
 
-  for (size_t i = 0; i < ten_cmd_custom_fields_info_size; ++i) {
-    ten_msg_put_field_to_json_func_t put_field_to_json =
-        ten_cmd_custom_fields_info[i].put_field_to_json;
-    if (put_field_to_json) {
-      if (!put_field_to_json(self, json, err)) {
-        ten_json_destroy(json);
-        return NULL;
-      }
-    }
+  if (!ten_raw_cmd_custom_loop_all_fields(
+          self, ten_raw_msg_put_one_field_to_json, json, err)) {
+    ten_json_destroy(json);
+    return NULL;
   }
-
-  ten_raw_cmd_custom_to_json_msgpack_serialization_hack(self, json);
 
   return json;
 }
@@ -247,8 +176,9 @@ bool ten_raw_cmd_custom_set_ten_property(ten_msg_t *self, ten_list_t *paths,
         if (!strcmp(TEN_STR_NAME,
                     ten_string_get_raw_str(&item->obj_item_str))) {
           if (ten_value_is_string(value)) {
-            ten_string_copy_c_str(&self->name, ten_value_peek_string(value),
-                                  strlen(ten_value_peek_string(value)));
+            ten_value_set_string_with_size(
+                &self->name, ten_value_peek_raw_str(value, &tmp_err),
+                strlen(ten_value_peek_raw_str(value, &tmp_err)));
             success = true;
           } else {
             success = false;
@@ -269,30 +199,19 @@ bool ten_raw_cmd_custom_set_ten_property(ten_msg_t *self, ten_list_t *paths,
   return success;
 }
 
-bool ten_raw_cmd_custom_check_type_and_name(ten_msg_t *self,
-                                            const char *type_str,
-                                            const char *name_str,
-                                            ten_error_t *err) {
-  TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Invalid argument.");
+bool ten_raw_cmd_custom_loop_all_fields(ten_msg_t *self,
+                                        ten_raw_msg_process_one_field_func_t cb,
+                                        void *user_data, ten_error_t *err) {
+  TEN_ASSERT(self && ten_raw_cmd_check_integrity((ten_cmd_t *)self) && cb,
+             "Should not happen.");
 
-  if (type_str) {
-    if (strcmp(type_str, TEN_STR_CMD) != 0) {
-      if (err) {
-        ten_error_set(err, TEN_ERRNO_GENERIC,
-                      "Incorrect message type for cmd: %s", type_str);
+  for (size_t i = 0; i < ten_cmd_custom_fields_info_size; ++i) {
+    ten_msg_process_field_func_t process_field =
+        ten_cmd_custom_fields_info[i].process_field;
+    if (process_field) {
+      if (!process_field(self, cb, user_data, err)) {
+        return false;
       }
-      return false;
-    }
-  }
-
-  if (name_str) {
-    if (strncmp(name_str, TEN_STR_MSG_NAME_TEN_NAMESPACE_PREFIX,
-                strlen(TEN_STR_MSG_NAME_TEN_NAMESPACE_PREFIX)) == 0) {
-      if (err) {
-        ten_error_set(err, TEN_ERRNO_GENERIC,
-                      "Incorrect message name for cmd: %s", name_str);
-      }
-      return false;
     }
   }
 

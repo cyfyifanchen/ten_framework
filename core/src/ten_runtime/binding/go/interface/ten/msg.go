@@ -12,7 +12,6 @@ import "C"
 
 import (
 	"runtime"
-	"unsafe"
 )
 
 // MsgType is an alias of `TEN_MSG_TYPE` from TEN runtime.
@@ -45,9 +44,7 @@ type Msg interface {
 	postSyncJob(payload job) any
 	keepAlive()
 
-	GetType() MsgType
 	GetName() (string, error)
-	ToJSON() string
 
 	iProperty
 }
@@ -189,40 +186,13 @@ func (p *msg) postSyncJob(payload job) any {
 	return p.process(payload)
 }
 
-func (p *msg) GetType() MsgType {
-	return p.process(func() any {
-		return p.getType()
-	}).(MsgType)
-}
-
-func (p *msg) getType() MsgType {
-	defer p.keepAlive()
-
-	return (MsgType)(C.ten_go_msg_get_type(p.cPtr))
-}
-
-func (p *msg) ToJSON() string {
-	return p.process(func() any {
-		return p.toJSON()
-	}).(string)
-}
-
-func (p *msg) toJSON() string {
-	defer p.keepAlive()
-
-	cString := C.ten_go_msg_to_json(p.cPtr)
-	defer C.free(unsafe.Pointer(cString))
-
-	return C.GoString(cString)
-}
-
 func (p *msg) GetName() (string, error) {
 	defer p.keepAlive()
 
 	var msgName *C.char
 	err := withCGOLimiter(func() error {
 		apiStatus := C.ten_go_msg_get_name(p.cPtr, &msgName)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 
 	if err != nil {

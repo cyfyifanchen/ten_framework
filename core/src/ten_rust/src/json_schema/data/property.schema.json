@@ -14,37 +14,11 @@
       ]
     },
     "uri": {
-      "oneOf": [
-        {
-          "type": "string",
-          "const": "localhost"
-        },
-        {
-          "type": "string",
-          "format": "uri"
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "value"
-          ],
-          "properties": {
-            "value": {
-              "type": "string",
-              "format": "uri"
-            },
-            "tags": {
-              "type": "array",
-              "minItems": 1,
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            }
-          }
-        }
-      ]
+      "type": "string",
+      "format": "uri",
+      "not": {
+        "const": "localhost"
+      }
     },
     "notEmptyString": {
       "type": "string",
@@ -54,6 +28,15 @@
       "type": "string",
       "minLength": 1,
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "path_in_msg_conversion": {
+      "type": "string",
+      // 1. Using X.Y.Z as a pattern, this represents object access.
+      //    The number of connections with `.` can be unlimited.
+      // 2. The rule for X/Y/Z/... is alphanumeric characters, or alphanumeric
+      //    characters followed by `[]`, where the content inside the `[]` must
+      //    only be numeric. This `[]` pattern represents array access.
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\[\\d+\\])*(\\.[A-Za-z_][A-Za-z0-9_]*(\\[\\d+\\])*)*$"
     },
     "valueType": {
       "type": "string",
@@ -80,18 +63,14 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "extension_group",
         "extension"
       ],
       "properties": {
         "app": {
           "$ref": "#/$defs/notEmptyString"
         },
-        "extension_group": {
-          "$ref": "#/$defs/notEmptyString"
-        },
         "extension": {
-          "$ref": "#/$defs/notEmptyString"
+          "$ref": "#/$defs/alphanumericCharacters"
         },
         "msg_conversion": {
           "type": "object",
@@ -118,7 +97,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "path": {
-                    "$ref": "#/$defs/notEmptyString"
+                    "$ref": "#/$defs/path_in_msg_conversion"
                   },
                   "conversion_mode": {
                     "type": "string",
@@ -157,18 +136,14 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "extension_group",
         "extension"
       ],
       "properties": {
         "app": {
           "$ref": "#/$defs/notEmptyString"
         },
-        "extension_group": {
-          "$ref": "#/$defs/notEmptyString"
-        },
         "extension": {
-          "$ref": "#/$defs/notEmptyString"
+          "$ref": "#/$defs/alphanumericCharacters"
         },
         "msg_conversion": {
           "$ref": "#/$defs/msgConversion"
@@ -186,12 +161,11 @@
         "type": {
           "type": "string",
           "enum": [
-            "extension",
-            "extension_group"
+            "extension"
           ]
         },
         "name": {
-          "$ref": "#/$defs/notEmptyString"
+          "$ref": "#/$defs/alphanumericCharacters"
         },
         "addon": {
           "$ref": "#/$defs/alphanumericCharacters"
@@ -200,7 +174,7 @@
           "$ref": "#/$defs/notEmptyString"
         },
         "extension_group": {
-          "$ref": "#/$defs/notEmptyString"
+          "$ref": "#/$defs/alphanumericCharacters"
         },
         "property": {
           "type": "object",
@@ -240,18 +214,14 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "extension_group",
         "extension"
       ],
       "properties": {
         "app": {
           "$ref": "#/$defs/notEmptyString"
         },
-        "extension_group": {
-          "$ref": "#/$defs/notEmptyString"
-        },
         "extension": {
-          "$ref": "#/$defs/notEmptyString"
+          "$ref": "#/$defs/alphanumericCharacters"
         },
         "cmd": {
           "$ref": "#/$defs/extensionCmdsInGraph"
@@ -295,7 +265,7 @@
             "additionalProperties": false,
             "properties": {
               "path": {
-                "$ref": "#/$defs/notEmptyString"
+                "$ref": "#/$defs/path_in_msg_conversion"
               },
               "conversion_mode": {
                 "type": "string",
@@ -489,9 +459,13 @@
             ],
             "properties": {
               "name": {
-                "$ref": "#/$defs/notEmptyString"
+                "$ref": "#/$defs/alphanumericCharacters"
               },
               "auto_start": {
+                "type": "boolean",
+                "default": false
+              },
+              "singleton": {
                 "type": "boolean",
                 "default": false
               },

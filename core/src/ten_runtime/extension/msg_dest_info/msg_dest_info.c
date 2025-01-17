@@ -8,6 +8,7 @@
 
 #include <stdlib.h>
 
+#include "include_internal/ten_runtime/common/constant_str.h"
 #include "include_internal/ten_runtime/extension/extension_info/extension_info.h"
 #include "include_internal/ten_runtime/extension/extension_info/json.h"
 #include "ten_utils/container/list_node_smart_ptr.h"
@@ -38,6 +39,8 @@ ten_msg_dest_info_t *ten_msg_dest_info_create(const char *msg_name) {
   ten_list_init(&self->dest);
 
   ten_string_init_formatted(&self->name, "%s", msg_name);
+
+  self->policy = TEN_DEFAULT_RESULT_RETURN_POLICY;
 
   return self;
 }
@@ -72,8 +75,15 @@ ten_shared_ptr_t *ten_msg_dest_info_clone(ten_shared_ptr_t *self,
     ten_extension_info_t *dest_extension_info =
         ten_extension_info_from_smart_ptr(dest);
 
-    ten_shared_ptr_t *new_dest =
-        ten_extension_info_clone(dest_extension_info, extensions_info, err);
+    ten_shared_ptr_t *new_dest = get_extension_info_in_extensions_info(
+        extensions_info,
+        ten_string_get_raw_str(&dest_extension_info->loc.app_uri),
+        ten_string_get_raw_str(&dest_extension_info->loc.graph_id),
+        ten_string_get_raw_str(&dest_extension_info->loc.extension_group_name),
+        NULL, ten_string_get_raw_str(&dest_extension_info->loc.extension_name),
+        true, err);
+    TEN_ASSERT(new_dest, "Should not happen.");
+
     if (!new_dest) {
       return NULL;
     }
@@ -109,6 +119,11 @@ bool ten_msg_dest_info_qualified(ten_msg_dest_info_t *self,
              "Should not happen.");
 
   if (ten_c_string_is_equal(ten_string_get_raw_str(&self->name), msg_name)) {
+    return true;
+  }
+
+  // "*" is a special rule that matches all names.
+  if (ten_string_is_equal_c_str(&self->name, TEN_STR_STAR)) {
     return true;
   }
 

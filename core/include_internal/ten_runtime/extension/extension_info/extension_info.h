@@ -27,9 +27,7 @@ typedef struct ten_extension_info_t {
   ten_sanitizer_thread_check_t thread_check;
 
   ten_string_t extension_addon_name;
-
   ten_loc_t loc;
-  ten_extension_t *extension;
 
   // The extension_info of the destination extension for each type of message.
   ten_all_msg_type_dest_info_t msg_dest_info;
@@ -37,13 +35,14 @@ typedef struct ten_extension_info_t {
   // The definition of properties in the graph related to the current extension.
   ten_value_t *property;
 
-  ten_list_t msg_conversions;  // ten_msg_conversion_t
+  ten_list_t msg_conversion_contexts;  // ten_msg_conversion_context_t
 } ten_extension_info_t;
 
 TEN_RUNTIME_PRIVATE_API ten_extension_info_t *ten_extension_info_create(void);
 
-TEN_RUNTIME_PRIVATE_API ten_shared_ptr_t *ten_extension_info_clone(
-    ten_extension_info_t *self, ten_list_t *extensions_info, ten_error_t *err);
+TEN_RUNTIME_PRIVATE_API bool ten_extensions_info_clone(ten_list_t *from,
+                                                       ten_list_t *to,
+                                                       ten_error_t *err);
 
 TEN_RUNTIME_PRIVATE_API bool ten_extension_info_check_integrity(
     ten_extension_info_t *self, bool check_thread);
@@ -56,10 +55,9 @@ TEN_RUNTIME_PRIVATE_API bool ten_extension_info_is_desired_extension_group(
     const char *extension_group_instance_name);
 
 TEN_RUNTIME_PRIVATE_API ten_shared_ptr_t *get_extension_info_in_extensions_info(
-    ten_list_t *extensions_info, const char *app_uri, const char *graph_name,
+    ten_list_t *extensions_info, const char *app_uri, const char *graph_id,
     const char *extension_group_name, const char *extension_addon_name,
-    const char *extension_instance_name, bool *new_one_created,
-    ten_error_t *err);
+    const char *extension_instance_name, bool should_exist, ten_error_t *err);
 
 TEN_RUNTIME_PRIVATE_API ten_extension_info_t *ten_extension_info_from_smart_ptr(
     ten_smart_ptr_t *smart_ptr);
@@ -68,4 +66,4 @@ TEN_RUNTIME_PRIVATE_API void ten_extensions_info_fill_app_uri(
     ten_list_t *extensions_info, const char *app_uri);
 
 TEN_RUNTIME_PRIVATE_API void ten_extensions_info_fill_loc_info(
-    ten_list_t *extensions_info, const char *app_uri, const char *graph_name);
+    ten_list_t *extensions_info, const char *app_uri, const char *graph_id);

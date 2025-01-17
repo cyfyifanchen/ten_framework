@@ -16,10 +16,6 @@
 TEN_RUNTIME_PRIVATE_API void ten_py_initialize_with_config(
     const char *program, ten_list_t *module_search_path);
 
-TEN_RUNTIME_PRIVATE_API void ten_py_set_program_name(const char *program_name);
-
-TEN_RUNTIME_PRIVATE_API void ten_py_set_argv(int argc, char **argv);
-
 TEN_RUNTIME_PRIVATE_API void ten_py_run_file(const char *file_path);
 
 // This function is meant to ensure that the current thread is ready to call
@@ -37,6 +33,3 @@ TEN_RUNTIME_PRIVATE_API PyGILState_STATE ten_py_gil_state_ensure(void);
 TEN_RUNTIME_PRIVATE_API void ten_py_gil_state_release(PyGILState_STATE state);
 
 TEN_RUNTIME_PRIVATE_API bool ten_py_is_holding_gil(void);
-
-TEN_RUNTIME_PRIVATE_API PyThreadState *ten_py_gil_state_get_this_thread_state(
-    void);

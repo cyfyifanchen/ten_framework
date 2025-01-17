@@ -20,6 +20,7 @@
 #include "ten_utils/lib/smart_ptr.h"
 #include "ten_utils/lib/string.h"
 #include "ten_utils/lib/time.h"
+#include "ten_utils/log/log.h"
 
 static void ten_extension_in_path_timer_on_triggered(ten_timer_t *self,
                                                      void *on_trigger_data) {
@@ -89,7 +90,7 @@ static void ten_extension_out_path_timer_on_triggered(ten_timer_t *self,
   }
 
   if (!ten_list_is_empty(&timeout_cmd_result_list)) {
-    TEN_LOGE("[%s] %zu paths timeout.", ten_extension_get_name(extension),
+    TEN_LOGE("[%s] %zu paths timeout.", ten_extension_get_name(extension, true),
              ten_list_size(&timeout_cmd_result_list));
   }
 
@@ -115,7 +116,7 @@ ten_timer_t *ten_extension_create_timer_for_in_path(ten_extension_t *self) {
 
   ten_timer_t *timer = ten_timer_create(
       ten_extension_thread_get_attached_runloop(extension_thread),
-      self->path_timeout_info.check_interval, TEN_TIMER_INFINITE);
+      self->path_timeout_info.check_interval, TEN_TIMER_INFINITE, true);
 
   ten_timer_set_on_triggered(timer, ten_extension_in_path_timer_on_triggered,
                              self);
@@ -135,7 +136,7 @@ ten_timer_t *ten_extension_create_timer_for_out_path(ten_extension_t *self) {
 
   ten_timer_t *timer = ten_timer_create(
       ten_extension_thread_get_attached_runloop(extension_thread),
-      self->path_timeout_info.check_interval, TEN_TIMER_INFINITE);
+      self->path_timeout_info.check_interval, TEN_TIMER_INFINITE, true);
 
   ten_timer_set_on_triggered(timer, ten_extension_out_path_timer_on_triggered,
                              self);

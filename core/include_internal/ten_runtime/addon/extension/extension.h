@@ -9,5 +9,8 @@
 #include "ten_runtime/ten_config.h"
 
 typedef struct ten_addon_store_t ten_addon_store_t;
+typedef struct ten_addon_t ten_addon_t;
 
-TEN_RUNTIME_PRIVATE_API ten_addon_store_t *ten_extension_get_store(void);
+TEN_RUNTIME_PRIVATE_API ten_addon_store_t *ten_extension_get_global_store(void);
+
+TEN_RUNTIME_API void ten_addon_unregister_all_extension(void);

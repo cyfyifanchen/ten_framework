@@ -10,13 +10,13 @@
 #include <string.h>
 
 #include "include_internal/ten_utils/common/constant_str.h"
-#include "ten_utils/macro/check.h"
 #include "include_internal/ten_utils/macro/memory.h"
 #include "include_internal/ten_utils/value/value.h"
-#include "include_internal/ten_utils/value/value_set.h"
 #include "ten_runtime/common/errno.h"
 #include "ten_utils/lib/error.h"
 #include "ten_utils/lib/string.h"
+#include "ten_utils/log/log.h"
+#include "ten_utils/macro/check.h"
 #include "ten_utils/macro/memory.h"
 #include "ten_utils/value/value.h"
 #include "ten_utils/value/value_get.h"
@@ -186,10 +186,21 @@ bool ten_placeholder_resolve(ten_placeholder_t *self,
         // Environment variable not found, use default value.
         if (!ten_value_is_valid(&self->default_value)) {
           // If no default value is provided, use 'null' value.
+          TEN_LOGE(
+              "Environment variable %s is not found, neither default value is "
+              "provided.",
+              variable_name);
+          exit(-1);
+
           ten_value_reset_to_null(placeholder_value);
         } else {
           const char *default_value =
-              ten_value_peek_string(&self->default_value);
+              ten_value_peek_raw_str(&self->default_value, err);
+
+          TEN_LOGI(
+              "Environment variable %s is not found, using default value %s.",
+              variable_name, default_value);
+
           ten_value_reset_to_string_with_size(placeholder_value, default_value,
                                               strlen(default_value));
         }

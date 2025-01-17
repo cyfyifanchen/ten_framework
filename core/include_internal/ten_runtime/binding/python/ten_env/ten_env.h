@@ -13,7 +13,7 @@
 #include "include_internal/ten_runtime/ten_env_proxy/ten_env_proxy.h"
 #include "ten_runtime/ten_env/ten_env.h"
 
-#define TEN_PY_TEN_SIGNATURE 0xCCCC1DD4BB4CA743U
+#define TEN_PY_TEN_ENV_SIGNATURE 0xCCCC1DD4BB4CA743U
 
 typedef struct ten_py_ten_env_t {
   PyObject_HEAD
@@ -26,6 +26,7 @@ typedef struct ten_py_ten_env_t {
 
   // Mark whether the gil state need to be released after 'on_deinit_done'.
   bool need_to_release_gil_state;
+  PyThreadState *py_thread_state;
 } ten_py_ten_env_t;
 
 TEN_RUNTIME_PRIVATE_API bool ten_py_ten_env_check_integrity(
@@ -33,7 +34,8 @@ TEN_RUNTIME_PRIVATE_API bool ten_py_ten_env_check_integrity(
 
 TEN_RUNTIME_PRIVATE_API PyTypeObject *ten_py_ten_env_type(void);
 
-TEN_RUNTIME_PRIVATE_API ten_py_ten_env_t *ten_py_ten_wrap(ten_env_t *ten_env);
+TEN_RUNTIME_PRIVATE_API ten_py_ten_env_t *ten_py_ten_env_wrap(
+    ten_env_t *ten_env);
 
 TEN_RUNTIME_PRIVATE_API void ten_py_ten_env_invalidate(
     ten_py_ten_env_t *py_ten);
@@ -58,9 +60,6 @@ TEN_RUNTIME_PRIVATE_API PyObject *ten_py_ten_env_on_deinit_done(PyObject *self,
 TEN_RUNTIME_PRIVATE_API PyObject *ten_py_ten_env_on_create_instance_done(
     PyObject *self, PyObject *args);
 
-TEN_RUNTIME_PRIVATE_API PyObject *ten_py_ten_env_send_json(PyObject *self,
-                                                           PyObject *args);
-
 TEN_RUNTIME_PRIVATE_API PyObject *ten_py_ten_env_send_cmd(PyObject *self,
                                                           PyObject *args);
 
@@ -72,9 +71,6 @@ TEN_RUNTIME_PRIVATE_API PyObject *ten_py_ten_env_send_video_frame(
 
 TEN_RUNTIME_PRIVATE_API PyObject *ten_py_ten_env_send_audio_frame(
     PyObject *self, PyObject *args);
-
-TEN_RUNTIME_PRIVATE_API PyObject *ten_py_ten_return_json(PyObject *self,
-                                                         PyObject *args);
 
 TEN_RUNTIME_PRIVATE_API PyObject *ten_py_ten_env_return_result(PyObject *self,
                                                                PyObject *args);
@@ -89,9 +85,6 @@ TEN_RUNTIME_PRIVATE_API PyObject *ten_py_ten_env_set_property_from_json(
     PyObject *self, PyObject *args);
 
 TEN_RUNTIME_PRIVATE_API PyObject *ten_py_ten_env_is_property_exist(
-    PyObject *self, PyObject *args);
-
-TEN_RUNTIME_PRIVATE_API PyObject *ten_py_ten_env_is_cmd_connected(
     PyObject *self, PyObject *args);
 
 TEN_RUNTIME_PRIVATE_API PyObject *ten_py_ten_env_get_property_int(

@@ -69,6 +69,13 @@ ten_list_t ten_type_from_json(ten_json_t *json) {
   return result;
 }
 
+// When converting `ten_value_t` between different types, this function is used
+// to check if the types before and after the conversion are compatible. If they
+// are not compatible, the conversion will not proceed. This mechanism ensures
+// that compatibility between `TEN` types throughout the entire `TEN` system is
+// managed consistently by this function. Even in `TEN` Rust code, if type
+// compatibility between `TEN` types needs to be checked, it will ultimately
+// rely on this function.
 bool ten_type_is_compatible(TEN_TYPE actual, TEN_TYPE expected) {
   if (actual == TEN_TYPE_INVALID || expected == TEN_TYPE_INVALID) {
     return false;
@@ -78,20 +85,12 @@ bool ten_type_is_compatible(TEN_TYPE actual, TEN_TYPE expected) {
     return true;
   }
 
-  if ((expected == TEN_TYPE_UINT8 || expected == TEN_TYPE_INT8 ||
-       expected == TEN_TYPE_UINT16 || expected == TEN_TYPE_INT16 ||
-       expected == TEN_TYPE_UINT32 || expected == TEN_TYPE_INT32 ||
-       expected == TEN_TYPE_UINT64 || expected == TEN_TYPE_INT64) &&
-      (actual == TEN_TYPE_UINT8 || actual == TEN_TYPE_INT8 ||
-       actual == TEN_TYPE_UINT16 || actual == TEN_TYPE_INT16 ||
-       actual == TEN_TYPE_UINT32 || actual == TEN_TYPE_INT32 ||
-       actual == TEN_TYPE_UINT64 || actual == TEN_TYPE_INT64)) {
-    return true;
+  if (TEN_IS_INTEGER_TYPE(expected)) {
+    return TEN_IS_INTEGER_TYPE(actual);
   }
 
-  if ((expected == TEN_TYPE_FLOAT32 || expected == TEN_TYPE_FLOAT64) &&
-      (actual == TEN_TYPE_FLOAT32 || actual == TEN_TYPE_FLOAT64)) {
-    return true;
+  if (TEN_IS_FLOAT_TYPE(expected)) {
+    return TEN_IS_INTEGER_TYPE(actual) || TEN_IS_FLOAT_TYPE(actual);
   }
 
   switch (expected) {

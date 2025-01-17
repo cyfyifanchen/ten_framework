@@ -12,15 +12,14 @@
 #include "include_internal/ten_runtime/common/constant_str.h"
 #include "include_internal/ten_runtime/msg/msg.h"
 #include "include_internal/ten_runtime/msg/video_frame/field/field_info.h"
-#include "ten_utils/macro/check.h"
 #include "include_internal/ten_utils/value/value_path.h"
 #include "include_internal/ten_utils/value/value_set.h"
-#include "ten_runtime/common/errno.h"
 #include "ten_runtime/msg/msg.h"
 #include "ten_runtime/msg/video_frame/video_frame.h"
 #include "ten_utils/lib/alloc.h"
 #include "ten_utils/lib/buf.h"
 #include "ten_utils/lib/string.h"
+#include "ten_utils/macro/check.h"
 #include "ten_utils/value/value.h"
 #include "ten_utils/value/value_get.h"
 
@@ -97,7 +96,7 @@ bool ten_raw_video_frame_set_pixel_fmt(ten_video_frame_t *self,
   return ten_value_set_int32(&self->pixel_fmt, pixel_fmt);
 }
 
-bool ten_raw_video_frame_set_is_eof(ten_video_frame_t *self, bool is_eof) {
+bool ten_raw_video_frame_set_eof(ten_video_frame_t *self, bool is_eof) {
   TEN_ASSERT(self, "Should not happen.");
   return ten_value_set_bool(&self->is_eof, is_eof);
 }
@@ -116,11 +115,31 @@ void ten_raw_video_frame_init(ten_video_frame_t *self) {
   ten_value_init_buf(&self->data, 0);
 }
 
-static ten_video_frame_t *ten_raw_video_frame_create(void) {
+static ten_video_frame_t *ten_raw_video_frame_create_empty(void) {
   ten_video_frame_t *self = TEN_MALLOC(sizeof(ten_video_frame_t));
   TEN_ASSERT(self, "Failed to allocate memory.");
 
   ten_raw_video_frame_init(self);
+
+  return self;
+}
+
+static ten_video_frame_t *ten_raw_video_frame_create(const char *name,
+                                                     ten_error_t *err) {
+  TEN_ASSERT(name, "Invalid argument.");
+
+  ten_video_frame_t *self = ten_raw_video_frame_create_empty();
+  ten_raw_msg_set_name((ten_msg_t *)self, name, err);
+
+  return self;
+}
+
+static ten_video_frame_t *ten_raw_video_frame_create_with_name_len(
+    const char *name, size_t name_len, ten_error_t *err) {
+  TEN_ASSERT(name, "Invalid argument.");
+
+  ten_video_frame_t *self = ten_raw_video_frame_create_empty();
+  ten_raw_msg_set_name_with_len((ten_msg_t *)self, name, name_len, err);
 
   return self;
 }
@@ -135,9 +154,22 @@ void ten_raw_video_frame_destroy(ten_video_frame_t *self) {
   TEN_FREE(self);
 }
 
-ten_shared_ptr_t *ten_video_frame_create(void) {
-  return ten_shared_ptr_create(ten_raw_video_frame_create(),
+ten_shared_ptr_t *ten_video_frame_create_empty(void) {
+  return ten_shared_ptr_create(ten_raw_video_frame_create_empty(),
                                ten_raw_video_frame_destroy);
+}
+
+ten_shared_ptr_t *ten_video_frame_create(const char *name, ten_error_t *err) {
+  return ten_shared_ptr_create(ten_raw_video_frame_create(name, err),
+                               ten_raw_video_frame_destroy);
+}
+
+ten_shared_ptr_t *ten_video_frame_create_with_name_len(const char *name,
+                                                       size_t name_len,
+                                                       ten_error_t *err) {
+  return ten_shared_ptr_create(
+      ten_raw_video_frame_create_with_name_len(name, name_len, err),
+      ten_raw_video_frame_destroy);
 }
 
 int32_t ten_video_frame_get_width(ten_shared_ptr_t *self) {
@@ -207,9 +239,9 @@ bool ten_video_frame_is_eof(ten_shared_ptr_t *self) {
   return ten_raw_video_frame_is_eof(ten_shared_ptr_get_data(self));
 }
 
-bool ten_video_frame_set_is_eof(ten_shared_ptr_t *self, bool is_eof) {
+bool ten_video_frame_set_eof(ten_shared_ptr_t *self, bool is_eof) {
   TEN_ASSERT(self, "Should not happen.");
-  return ten_raw_video_frame_set_is_eof(ten_shared_ptr_get_data(self), is_eof);
+  return ten_raw_video_frame_set_eof(ten_shared_ptr_get_data(self), is_eof);
 }
 
 ten_msg_t *ten_raw_video_frame_as_msg_clone(ten_msg_t *self,
@@ -259,131 +291,6 @@ ten_msg_t *ten_raw_video_frame_as_msg_clone(ten_msg_t *self,
   return (ten_msg_t *)new_frame;
 }
 
-ten_json_t *ten_raw_video_frame_as_msg_to_json(ten_msg_t *self,
-                                               ten_error_t *err) {
-  TEN_ASSERT(self && ten_raw_msg_check_integrity(self) &&
-                 ten_raw_msg_get_type(self) == TEN_MSG_TYPE_VIDEO_FRAME,
-             "Should not happen.");
-
-  ten_json_t *json = ten_json_create_object();
-  TEN_ASSERT(json, "Should not happen.");
-
-  if (!ten_raw_msg_put_field_to_json(self, json, err)) {
-    ten_json_destroy(json);
-    return NULL;
-  }
-
-  return json;
-}
-
-bool ten_raw_video_frame_check_type_and_name(ten_msg_t *self,
-                                             const char *type_str,
-                                             const char *name_str,
-                                             ten_error_t *err) {
-  TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Invalid argument.");
-
-  if (type_str) {
-    if (strcmp(type_str, TEN_STR_VIDEO_FRAME) != 0) {
-      if (err) {
-        ten_error_set(err, TEN_ERRNO_GENERIC,
-                      "Incorrect message type for video frame: %s", type_str);
-      }
-      return false;
-    }
-  }
-
-  if (name_str) {
-    if (strncmp(name_str, TEN_STR_MSG_NAME_TEN_NAMESPACE_PREFIX,
-                strlen(TEN_STR_MSG_NAME_TEN_NAMESPACE_PREFIX)) == 0) {
-      if (err) {
-        ten_error_set(err, TEN_ERRNO_GENERIC,
-                      "Incorrect message name for video frame: %s", name_str);
-      }
-      return false;
-    }
-  }
-
-  return true;
-}
-
-static bool ten_raw_video_frame_init_from_json(ten_video_frame_t *self,
-                                               ten_json_t *json,
-                                               ten_error_t *err) {
-  TEN_ASSERT(self && ten_raw_video_frame_check_integrity(self),
-             "Should not happen.");
-  TEN_ASSERT(json && ten_json_check_integrity(json), "Should not happen.");
-
-  for (size_t i = 0; i < ten_video_frame_fields_info_size; ++i) {
-    ten_msg_get_field_from_json_func_t get_field_from_json =
-        ten_video_frame_fields_info[i].get_field_from_json;
-    if (get_field_from_json) {
-      if (!get_field_from_json((ten_msg_t *)self, json, err)) {
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
-
-static ten_video_frame_t *ten_raw_video_frame_create_from_json(
-    ten_json_t *json, ten_error_t *err) {
-  TEN_ASSERT(json, "Should not happen.");
-
-  ten_video_frame_t *video_frame = ten_raw_video_frame_create();
-  TEN_ASSERT(video_frame && ten_raw_video_frame_check_integrity(
-                                (ten_video_frame_t *)video_frame),
-             "Should not happen.");
-
-  if (!ten_raw_video_frame_init_from_json(video_frame, json, err)) {
-    ten_raw_video_frame_destroy(video_frame);
-    return NULL;
-  }
-
-  return video_frame;
-}
-
-static ten_video_frame_t *ten_raw_video_frame_create_from_json_string(
-    const char *json_str, ten_error_t *err) {
-  ten_json_t *json = ten_json_from_string(json_str, err);
-  if (json == NULL) {
-    return NULL;
-  }
-
-  ten_video_frame_t *video_frame =
-      ten_raw_video_frame_create_from_json(json, err);
-
-  ten_json_destroy(json);
-
-  return video_frame;
-}
-
-ten_shared_ptr_t *ten_video_frame_create_from_json_string(const char *json_str,
-                                                          ten_error_t *err) {
-  ten_video_frame_t *video_frame =
-      ten_raw_video_frame_create_from_json_string(json_str, err);
-  return ten_shared_ptr_create(video_frame, ten_raw_video_frame_destroy);
-}
-
-ten_msg_t *ten_raw_video_frame_as_msg_create_from_json(ten_json_t *json,
-                                                       ten_error_t *err) {
-  TEN_ASSERT(json, "Should not happen.");
-
-  return (ten_msg_t *)ten_raw_video_frame_create_from_json(json, err);
-}
-
-bool ten_raw_video_frame_as_msg_init_from_json(ten_msg_t *self,
-                                               ten_json_t *json,
-                                               ten_error_t *err) {
-  TEN_ASSERT(
-      self && ten_raw_video_frame_check_integrity((ten_video_frame_t *)self),
-      "Should not happen.");
-  TEN_ASSERT(json && ten_json_check_integrity(json), "Should not happen.");
-
-  return ten_raw_video_frame_init_from_json((ten_video_frame_t *)self, json,
-                                            err);
-}
-
 bool ten_raw_video_frame_set_ten_property(ten_msg_t *self, ten_list_t *paths,
                                           ten_value_t *value,
                                           ten_error_t *err) {
@@ -412,7 +319,7 @@ bool ten_raw_video_frame_set_ten_property(ten_msg_t *self, ten_list_t *paths,
       case TEN_VALUE_PATH_ITEM_TYPE_OBJECT_ITEM: {
         if (!strcmp(TEN_STR_PIXEL_FMT,
                     ten_string_get_raw_str(&item->obj_item_str))) {
-          const char *pixel_fmt_str = ten_value_peek_string(value);
+          const char *pixel_fmt_str = ten_value_peek_raw_str(value, err);
           ten_raw_video_frame_set_pixel_fmt(
               video_frame,
               ten_video_frame_pixel_fmt_from_string(pixel_fmt_str));
@@ -505,4 +412,24 @@ ten_value_t *ten_raw_video_frame_peek_ten_property(ten_msg_t *self,
   }
 
   return result;
+}
+
+bool ten_raw_video_frame_loop_all_fields(
+    ten_msg_t *self, ten_raw_msg_process_one_field_func_t cb, void *user_data,
+    ten_error_t *err) {
+  TEN_ASSERT(
+      self && ten_raw_video_frame_check_integrity((ten_video_frame_t *)self),
+      "Should not happen.");
+
+  for (size_t i = 0; i < ten_video_frame_fields_info_size; ++i) {
+    ten_msg_process_field_func_t process_field =
+        ten_video_frame_fields_info[i].process_field;
+    if (process_field) {
+      if (!process_field(self, cb, user_data, err)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
 }

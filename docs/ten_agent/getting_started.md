@@ -14,16 +14,16 @@ layout:
 
 # Quickstart
 
-In this chapter, we’ll build the TEN Agent together. For additional help, check out the YouTube video tutorial at the end.
+In this chapter, let's build the TEN Agent playground together.
 
 ## Prerequisites
 
 {% tabs %}
 {% tab title="API Keys" %}
 
-* Agora App ID and App Certificate([read here on how](https://docs.agora.io/en/video-calling/get-started/manage-agora-account?platform=web))
-* Azure [speech-to-text](https://azure.microsoft.com/en-us/products/ai-services/speech-to-text) and [text-to-speech](https://azure.microsoft.com/en-us/products/ai-services/text-to-speech) API keys
-* [OpenAI](https://openai.com/index/openai-api/) API key
+* Agora [ App ID ](https://docs.agora.io/en/video-calling/get-started/manage-agora-account?platform=web#create-an-agora-project) and [ App Certificate ](https://docs.agora.io/en/video-calling/get-started/manage-agora-account?platform=web#create-an-agora-project)(free minutes every month)
+<!-- * [OpenAI](https://openai.com/index/openai-api/) API key -->
+<!-- * Azure [speech-to-text](https://azure.microsoft.com/en-us/products/ai-services/speech-to-text) and [text-to-speech](https://azure.microsoft.com/en-us/products/ai-services/text-to-speech) API keys -->
 {% endtab %}
 
 {% tab title="Installations" %}
@@ -42,16 +42,26 @@ In this chapter, we’ll build the TEN Agent together. For additional help, chec
 **Docker setting on Apple Silicon**
 
 {% hint style="info" %}
-You will need to uncheck "Use Rosetta for x86\_64/amd64 emulation on Apple Silicon" option for Docker if you are on Apple Silicon, otherwise the server is not going to work.
+For Apple Silicon Macs, uncheck "Use Rosetta for x86/amd64 emulation" in Docker settings. Note: This may result in slower build times on ARM, but performance will be normal when deployed to x64 servers.
 {% endhint %}
 
 <figure><img src="../assets/gif/docker_setting.gif" alt="" width="563"><figcaption><p>Make sure the box is unchecked</p></figcaption></figure>
 
 ## Next step
 
-**1. Prepare config files**
+**1. Clone down the TEN Agent repository**
 
-In the root of the project, use `cd` command to create \`.env\` file from example . It will be used to store information for \`docker compose\` later.
+{% code title=">_ Terminal" %}
+
+```sh
+git clone https://github.com/TEN-framework/TEN-Agent.git
+```
+
+{% endcode %}
+
+**2. Prepare config files**
+
+Open TEN Agent in your code editor. In the root of the project, use `cd` command to create \`.env\` file from example.
 
 {% code title=">_ Terminal" %}
 
@@ -61,85 +71,73 @@ cp ./.env.example ./.env
 
 {% endcode %}
 
-**2. Setup API keys & Environment variables in .env file**
+**3. Setup Agora App ID and App Certificate in   .env file**
 
-Open the `.env` file and fill in the keys and regions. This is also where you can choose to use any different extensions:
+Open the `.env` file and fill in Agora App ID and App Certificate.These will be used to connect to Agora RTC extension.
 
 {% code title=".env" %}
 
 ```bash
-# Agora App ID and App Certificate
 AGORA_APP_ID=
-# Certificate is only required when enabled within Agora.io account
 AGORA_APP_CERTIFICATE=
-
-# Azure STT key and region
-AZURE_STT_KEY=
-AZURE_STT_REGION=
-
-# Azure TTS key and region
-AZURE_TTS_KEY=
-AZURE_TTS_REGION=
-
-# OpenAI API key
-OPENAI_API_KEY=
 ```
 
 {% endcode %}
 
-**3. Start agent builder toolkit containers**
+**4. Start agent builder toolkit containers**
 
 In the same directory, run the `docker` command to compose containers:
 
 {% code title=">_ Terminal" %}
 
 ```bash
-docker compose up
+docker compose up -d
 ```
 
 {% endcode %}
 
-**4. Build TEN Agent**&#x20;
+**5. Enter container**
 
-Open up a separate terminal window, build the agent and start the server:
+Use the following command to enter the container:
 
 {% code title=">_ Bash" %}
 
 ```bash
-docker exec -it astra_agents_dev bash
-make build
+docker exec -it ten_agent_dev bash
 ```
 
 {% endcode %}
 
-**5. Start the server**
+**6. Build the agent**
 
-Now the server is running at port: 8080.
+Use the following command to build the agent:
 
 {% code title=">_ Bash" %}
 
 ```bash
-make run-server
+task use
 ```
 
 {% endcode %}
 
-## **Finish and verify your agent**
+**7. Start the web server**
 
-You can open [https://localhost:3001](https://localhost:3001/) in browser to use your graph designer. Simultaneously, open another tab at [https://localhost:3000](https://localhost:3000/) to see the customized voice agent up and running.
+Use the following command to start the web server:
 
-Now you have the power of the Graph Designer at your fingertips to perform the magic of agent customization yourself. 🎉
+{% code title=">_ Bash" %}
 
-**Graph designer**
+```bash
+task run
+```
 
-TEN Graph Designer (beta), a tool that requires zero coding knowledge and makes the experience of creating agentic applications smoother.
+{% endcode %}
 
-<figure><img src="../assets/gif/graph_designer.gif" alt=""><figcaption><p>Graph Designer</p></figcaption></figure>
 
-## Video tutorials
+**8. Edit playground settings**
 
-English:
-<https://www.youtube.com/watch?t=1s&v=_AZ3RedzvRg>
+Open the playground at [localhost:3000](http://localhost:3000) to configure your agent.
+ 1. Select a graph type (e.g. Voice Agent, Realtime Agent)
+ 2. Choose a corresponding module
+ 3. Select an extension and configure its API key settings
 
-中文:
-<https://www.youtube.com/watch?v=MbqF4c2Myrw>
+![Module Example](https://github.com/TEN-framework/docs/blob/main/assets/gif/module-example.gif?raw=true)

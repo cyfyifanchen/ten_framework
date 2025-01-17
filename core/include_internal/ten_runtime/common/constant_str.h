@@ -30,6 +30,7 @@
 // Result command relevant fields.
 #define TEN_STR_STATUS_CODE "status_code"
 #define TEN_STR_DETAIL "detail"
+#define TEN_STR_IS_FINAL "is_final"
 
 // Timer relevant fields.
 #define TEN_STR_TIMER_ID "timer_id"
@@ -111,6 +112,10 @@
 // App uri.
 #define TEN_STR_URI "uri"
 #define TEN_STR_LOCALHOST "localhost"
+#define TEN_STR_CLIENT "client:"
+
+// Data.
+#define TEN_STR_BUF "buf"
 
 // Video frame.
 #define TEN_STR_PIXEL_FMT "pixel_fmt"
@@ -128,12 +133,13 @@
 #define TEN_STR_SAMPLE_RATE "sample_rate"
 #define TEN_STR_SAMPLES_PER_CHANNEL "samples_per_channel"
 
-// Msgpack hack.
-#define TEN_STR_SPECIAL_CMD_FOR_SERIALIZATION \
-  "__special_cmd_for_serialization__"
-#define TEN_STR_MSGPACK_SERIALIZATION_HACK "msgpack_serialization_hack"
-
+// Graph.
 #define TEN_STR_AUTO_START "auto_start"
+#define TEN_STR_SINGLETON "singleton"
+#define TEN_STR_GRAPH "graph"
+#define TEN_STR_GRAPH_NAME "graph_name"
+#define TEN_STR_GRAPH_ID "graph_id"
+
 #define TEN_STR_CASCADE_CLOSE_UPWARD "cascade_close_upward"
 #define TEN_STR_DUPLICATE "duplicate"
 #define TEN_STR_ADDON "addon"
@@ -143,11 +149,13 @@
 #define TEN_STR_LOG_FILE "log_file"
 #define TEN_STR_PROPERTIES "properties"
 #define TEN_STR_LONG_RUNNING_MODE "long_running_mode"
-#define TEN_STR_GRAPH "graph"
-#define TEN_STR_GRAPH_NAME "graph_name"
 #define TEN_STR_TYPE "type"
 #define TEN_STR_APP "app"
 #define TEN_STR_NAME "name"
 #define TEN_STR_UNDERLINE_TEN "_ten"
+#define TEN_STR_STAR "*"
 
 #define TEN_STR_DEFAULT_EXTENSION_GROUP "default_extension_group"
+#define TEN_STR_TEN_TEST_EXTENSION "ten:test_extension"
+
+#define TEN_STR_MANIFEST_JSON "manifest.json"

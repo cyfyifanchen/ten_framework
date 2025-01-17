@@ -83,7 +83,6 @@ func (p *DefaultExtension) OnAudioFrame(
 // Via embedding, the `extension` struct "inherits" all methods of Extension.
 type extension struct {
 	Extension
-
 	baseTenObject[C.uintptr_t]
 }
 
@@ -98,13 +97,13 @@ func WrapExtension(
 	extObjID := newImmutableHandle(extInstance)
 
 	var bridge C.uintptr_t
-	status := C.ten_go_extension_create(
+	cgo_error := C.ten_go_extension_create(
 		cHandle(extObjID),
 		unsafe.Pointer(unsafe.StringData(name)),
 		C.int(len(name)),
 		&bridge,
 	)
-	if err := withGoStatus(&status); err != nil {
+	if err := withCGoError(&cgo_error); err != nil {
 		log.Printf("Failed to create extension, %v\n", err)
 		return nil
 	}
@@ -136,7 +135,6 @@ func newExtensionWithBridge(
 	return newImmutableHandle(instance)
 }
 
-//
 //export tenGoExtensionOnConfigure
 func tenGoExtensionOnConfigure(
 	extensionID C.uintptr_t,
@@ -156,7 +154,7 @@ func tenGoExtensionOnConfigure(
 	if !ok {
 		panic(
 			fmt.Sprintf(
-				"Failed to get ten from handle map, id: %d.",
+				"Failed to get ten env from handle map, id: %d.",
 				uintptr(tenEnvID),
 			),
 		)
@@ -173,7 +171,6 @@ func tenGoExtensionOnConfigure(
 	extensionObj.OnConfigure(tenEnvObj)
 }
 
-//
 //export tenGoExtensionOnInit
 func tenGoExtensionOnInit(
 	extensionID C.uintptr_t,
@@ -193,7 +190,7 @@ func tenGoExtensionOnInit(
 	if !ok {
 		panic(
 			fmt.Sprintf(
-				"Failed to get ten from handle map, id: %d.",
+				"Failed to get ten env from handle map, id: %d.",
 				uintptr(tenEnvID),
 			),
 		)
@@ -232,7 +229,7 @@ func tenGoExtensionOnStart(extensionID C.uintptr_t, tenEnvID C.uintptr_t) {
 	if !ok {
 		panic(
 			fmt.Sprintf(
-				"Failed to get ten from handle map, id: %d.",
+				"Failed to get ten env from handle map, id: %d.",
 				uintptr(tenEnvID),
 			),
 		)
@@ -257,7 +254,7 @@ func tenGoExtensionOnStop(extensionID C.uintptr_t, tenEnvID C.uintptr_t) {
 	if !ok {
 		panic(
 			fmt.Sprintf(
-				"Failed to get ten from handle map, id: %d.",
+				"Failed to get ten env from handle map, id: %d.",
 				uintptr(tenEnvID),
 			),
 		)
@@ -282,7 +279,7 @@ func tenGoExtensionOnDeinit(extensionID C.uintptr_t, tenEnvID C.uintptr_t) {
 	if !ok {
 		panic(
 			fmt.Sprintf(
-				"Failed to get ten from handle map, id: %d.",
+				"Failed to get ten env from handle map, id: %d.",
 				uintptr(tenEnvID),
 			),
 		)
@@ -311,7 +308,7 @@ func tenGoExtensionOnCmd(
 	if !ok {
 		panic(
 			fmt.Sprintf(
-				"Failed to get ten from handle map, id: %d.",
+				"Failed to get ten env from handle map, id: %d.",
 				uintptr(tenEnvID),
 			),
 		)
@@ -342,7 +339,7 @@ func tenGoExtensionOnData(
 	if !ok {
 		panic(
 			fmt.Sprintf(
-				"Failed to get ten from handle map, id: %d.",
+				"Failed to get ten env from handle map, id: %d.",
 				uintptr(tenEnvID),
 			),
 		)
@@ -354,7 +351,6 @@ func tenGoExtensionOnData(
 	extensionObj.OnData(tenEnvObj, d)
 }
 
-//
 //export tenGoExtensionOnVideoFrame
 func tenGoExtensionOnVideoFrame(
 	extensionID C.uintptr_t,
@@ -375,7 +371,7 @@ func tenGoExtensionOnVideoFrame(
 	if !ok {
 		panic(
 			fmt.Sprintf(
-				"Failed to get ten from handle map, id: %d.",
+				"Failed to get ten env from handle map, id: %d.",
 				uintptr(tenEnvID),
 			),
 		)
@@ -385,7 +381,6 @@ func tenGoExtensionOnVideoFrame(
 	extensionObj.OnVideoFrame(tenEnvObj, videoFrameObj)
 }
 
-//
 //export tenGoExtensionOnAudioFrame
 func tenGoExtensionOnAudioFrame(
 	extensionID C.uintptr_t,
@@ -406,7 +401,7 @@ func tenGoExtensionOnAudioFrame(
 	if !ok {
 		panic(
 			fmt.Sprintf(
-				"Failed to get ten from handle map, id: %d.",
+				"Failed to get ten env from handle map, id: %d.",
 				uintptr(tenEnvID),
 			),
 		)

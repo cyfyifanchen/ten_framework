@@ -4,43 +4,37 @@
     "log_level": 2,
     "predefined_graphs": [
       {
-        "name": "0",
+        "name": "default",
         "auto_start": true,
+        "singleton": true,
         "nodes": [
-          {
-            "type": "extension_group",
-            "name": "nodetest_group",
-            "addon": "default_extension_group"
-          },
           {
             "type": "extension",
             "name": "A",
-            "addon": "nodetest",
+            "addon": "extension_a",
             "extension_group": "nodetest_group"
           },
           {
             "type": "extension",
             "name": "B",
-            "addon": "nodetest",
+            "addon": "extension_b",
             "extension_group": "nodetest_group"
           },
           {
             "type": "extension",
             "name": "C",
-            "addon": "nodetest",
+            "addon": "extension_c",
             "extension_group": "nodetest_group"
           }
         ],
         "connections": [
           {
-            "extension_group": "nodetest_group",
             "extension": "A",
             "cmd": [
               {
                 "name": "start",
                 "dest": [
                   {
-                    "extension_group": "nodetest_group",
                     "extension": "B"
                   }
                 ]
@@ -49,7 +43,6 @@
                 "name": "stop",
                 "dest": [
                   {
-                    "extension_group": "nodetest_group",
                     "extension": "B"
                   }
                 ]
@@ -57,14 +50,12 @@
             ]
           },
           {
-            "extension_group": "nodetest_group",
             "extension": "B",
             "cmd": [
               {
                 "name": "start",
                 "dest": [
                   {
-                    "extension_group": "nodetest_group",
                     "extension": "C"
                   }
                 ]
@@ -73,7 +64,6 @@
                 "name": "stop",
                 "dest": [
                   {
-                    "extension_group": "nodetest_group",
                     "extension": "C"
                   }
                 ]
@@ -81,7 +71,6 @@
             ]
           },
           {
-            "extension_group": "nodetest_group",
             "extension": "C"
           }
         ]

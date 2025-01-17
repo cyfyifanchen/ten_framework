@@ -34,7 +34,7 @@ static void ten_protocol_msgpack_on_input(ten_protocol_msgpack_t *self,
   TEN_ASSERT(input_buf.data && input_buf.content_size && result_msgs,
              "Invalid argument.");
 
-  ten_msgpack_deserialize_msg(&self->parser, input_buf, result_msgs);
+  ten_msgpack_deserialize_msgs(&self->parser, input_buf, result_msgs);
 }
 
 static ten_buf_t ten_protocol_msgpack_on_output(ten_protocol_msgpack_t *self,
@@ -43,11 +43,12 @@ static ten_buf_t ten_protocol_msgpack_on_output(ten_protocol_msgpack_t *self,
              "Invalid argument.");
   TEN_ASSERT(self->base.on_output, "Invalid argument.");
 
-  return ten_msgpack_serialize_msg(output_msgs, NULL);
+  return ten_msgpack_serialize_msgs(output_msgs, NULL);
 }
 
 static void ten_protocol_msgpack_on_destroy_instance(
-    TEN_UNUSED ten_addon_t *addon, TEN_UNUSED ten_env_t *ten_env, void *_self) {
+    TEN_UNUSED ten_addon_t *addon, TEN_UNUSED ten_env_t *ten_env, void *_self,
+    TEN_UNUSED void *context) {
   ten_protocol_msgpack_t *self = (ten_protocol_msgpack_t *)_self;
   TEN_ASSERT(self &&
                  // TEN_NOLINTNEXTLINE(thread-check)
@@ -61,11 +62,13 @@ static void ten_protocol_msgpack_on_destroy_instance(
   ten_protocol_deinit(&self->base.base);
 
   TEN_FREE(self);
+
+  ten_env_on_destroy_instance_done(ten_env, context, NULL);
 }
 
-static void *ten_protocol_msgpack_on_create_instance(
-    TEN_UNUSED ten_addon_t *addon, TEN_UNUSED ten_env_t *ten_env,
-    TEN_UNUSED const char *name) {
+static void ten_protocol_msgpack_on_create_instance(
+    TEN_UNUSED ten_addon_t *addon, ten_env_t *ten_env,
+    TEN_UNUSED const char *name, void *context) {
   ten_protocol_msgpack_t *self =
       (ten_protocol_msgpack_t *)TEN_MALLOC(sizeof(ten_protocol_msgpack_t));
   TEN_ASSERT(self, "Failed to allocate memory.");
@@ -75,9 +78,14 @@ static void *ten_protocol_msgpack_on_create_instance(
       (ten_protocol_integrated_on_input_func_t)ten_protocol_msgpack_on_input,
       (ten_protocol_integrated_on_output_func_t)ten_protocol_msgpack_on_output);
 
+  // Configure the retry mechanism.
+  self->base.retry_config.enable = true;
+  self->base.retry_config.interval_ms = 500;
+  self->base.retry_config.max_retries = 5;
+
   ten_msgpack_parser_init(&self->parser);
 
-  return self;
+  ten_env_on_create_instance_done(ten_env, self, context, NULL);
 }
 
 static void ten_protocol_msgpack_on_init(TEN_UNUSED ten_addon_t *addon,
@@ -106,7 +114,6 @@ static ten_addon_t msgpack_protocol_factory = {
     NULL,
     ten_protocol_msgpack_on_create_instance,
     ten_protocol_msgpack_on_destroy_instance,
-    NULL,
     NULL,
     NULL,
 };

@@ -4,16 +4,18 @@
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
 //
-use std::{
-    collections::{HashMap, HashSet},
-    path::Path,
-};
+use std::{collections::HashMap, path::Path};
 
 use anyhow::Result;
 use console::Emoji;
 use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
 use semver::Version;
+
+use ten_rust::pkg_info::{
+    pkg_basic_info::PkgBasicInfo, pkg_type::PkgType,
+    pkg_type_and_name::PkgTypeAndName, PkgInfo,
+};
 
 use crate::{
     config::TmanConfig,
@@ -23,13 +25,10 @@ use crate::{
     },
     install::{install_pkg_info, PkgIdentityMapping},
 };
-use ten_rust::pkg_info::{
-    pkg_identity::PkgIdentity, pkg_type::PkgType, PkgInfo,
-};
 
 pub fn extract_solver_results_from_raw_solver_results(
     results: &[String],
-    all_candidates: &HashMap<PkgIdentity, HashSet<PkgInfo>>,
+    all_candidates: &HashMap<PkgTypeAndName, HashMap<PkgBasicInfo, PkgInfo>>,
 ) -> Result<Vec<PkgInfo>> {
     let re =
         Regex::new(r#"selected_pkg_version\("([^"]+)","([^"]+)","([^"]+)"\)"#)
@@ -46,27 +45,24 @@ pub fn extract_solver_results_from_raw_solver_results(
             let pkg_type = pkg_type_str.parse::<PkgType>()?;
             let semver = semver_str.parse::<Version>()?;
 
-            let candidates = all_candidates
-                .get(&PkgIdentity {
-                    pkg_type: pkg_type.clone(),
+            for candidate in all_candidates
+                .get(&PkgTypeAndName {
+                    pkg_type,
                     name: name.to_string(),
                 })
-                .unwrap();
-
-            for candidate in candidates {
-                if candidate.pkg_identity.pkg_type != pkg_type
-                    || candidate.pkg_identity.name != name
+                .unwrap()
+            {
+                if candidate.1.basic_info.type_and_name.pkg_type != pkg_type
+                    || candidate.1.basic_info.type_and_name.name != name
                 {
                     panic!("Should not happen.");
                 }
 
-                if candidate.version == semver {
-                    results_info.push(candidate.clone());
+                if candidate.1.basic_info.version == semver {
+                    results_info.push(candidate.1.clone());
                     continue 'outer;
                 }
             }
-        } else {
-            panic!("Should not happen. No match found.");
         }
     }
 
@@ -82,10 +78,19 @@ pub fn filter_solver_results_by_type_and_name<'a>(
     let mut filtered_results: Vec<&PkgInfo> = vec![];
 
     for result in solver_results.iter() {
-        let matches_type =
-            pkg_type.map_or(true, |pt| result.pkg_identity.pkg_type == *pt);
+        // After Rust 1.82, there is an `is_none_or` method, and Clippy will
+        // suggest using `is_none_or` for simplicity. However, since Ten
+        // currently needs to rely on Rust 1.81 on macOS (mainly because debug
+        // mode on Mac enables ASAN, and rustc must match the versions of
+        // LLVM/Clang to prevent ASAN linking errors), we disable this specific
+        // Clippy warning here.
+        #[allow(clippy::unnecessary_map_or)]
+        let matches_type = pkg_type
+            .map_or(true, |pt| result.basic_info.type_and_name.pkg_type == *pt);
+
+        #[allow(clippy::unnecessary_map_or)]
         let matches_name =
-            name.map_or(true, |n| result.pkg_identity.name == *n);
+            name.map_or(true, |n| result.basic_info.type_and_name.name == *n);
 
         let matches = matches_type && matches_name;
 
@@ -108,7 +113,7 @@ pub async fn install_solver_results_in_app_folder(
     template_ctx: Option<&serde_json::Value>,
     app_dir: &Path,
 ) -> Result<()> {
-    println!("{}  Installing packages...", Emoji("📦", "+"));
+    println!("{}  Installing packages...", Emoji("📥", "+"));
 
     let bar = ProgressBar::new(solver_results.len().try_into()?);
     bar.set_style(
@@ -121,11 +126,11 @@ pub async fn install_solver_results_in_app_folder(
         bar.inc(1);
         bar.set_message(format!(
             "{}/{}",
-            solver_result.pkg_identity.pkg_type,
-            solver_result.pkg_identity.name
+            solver_result.basic_info.type_and_name.pkg_type,
+            solver_result.basic_info.type_and_name.name
         ));
 
-        let base_dir = match solver_result.pkg_identity.pkg_type {
+        let base_dir = match solver_result.basic_info.type_and_name.pkg_type {
             PkgType::Extension => {
                 app_dir.join(TEN_PACKAGES_DIR).join(EXTENSION_DIR)
             }

@@ -11,6 +11,7 @@
 #include "core_protocols/msgpack/msg/msg.h"
 #include "msgpack.h"
 #include "ten_utils/lib/smart_ptr.h"
+#include "ten_utils/log/log.h"
 #include "ten_utils/macro/check.h"
 #include "ten_utils/macro/mark.h"
 
@@ -83,8 +84,8 @@ ten_shared_ptr_t *ten_msgpack_parser_parse_data(ten_msgpack_parser_t *self) {
     ten_msgpack_parser_feed_data(&msg_parser, self->unpacked.data.via.ext.ptr,
                                  self->unpacked.data.via.ext.size);
 
-    new_msg = ten_msgpack_deserialize_msg_internal(&msg_parser.unpacker,
-                                                   &msg_parser.unpacked);
+    new_msg =
+        ten_msgpack_deserialize_msg(&msg_parser.unpacker, &msg_parser.unpacked);
 
     ten_msgpack_parser_deinit(&msg_parser);
   } else if (rc == MSGPACK_UNPACK_CONTINUE) {

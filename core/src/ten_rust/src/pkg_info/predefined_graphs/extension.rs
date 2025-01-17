@@ -28,7 +28,7 @@ pub fn get_extension_nodes_in_graph(
 ) -> Result<Vec<GraphNode>> {
     if let Some(app_pkg) = all_pkgs
         .iter()
-        .find(|pkg| pkg.pkg_identity.pkg_type == PkgType::App)
+        .find(|pkg| pkg.basic_info.type_and_name.pkg_type == PkgType::App)
     {
         if app_pkg.property.is_none() {
             return Err(anyhow::anyhow!("'property.json' file not found."));
@@ -45,7 +45,9 @@ pub fn get_extension_nodes_in_graph(
                 .graph
                 .nodes
                 .iter()
-                .filter(|node| node.node_type == PkgType::Extension)
+                .filter(|node| {
+                    node.type_and_name.pkg_type == PkgType::Extension
+                })
                 .cloned()
                 .collect();
 
@@ -67,15 +69,15 @@ pub fn get_pkg_info_for_extension<'a>(
     all_pkgs
         .iter()
         .find(|pkg| {
-            pkg.pkg_identity.pkg_type == PkgType::Extension
-                && pkg.pkg_identity.name == extension.addon
+            pkg.basic_info.type_and_name.pkg_type == PkgType::Extension
+                && pkg.basic_info.type_and_name.name == extension.addon
         })
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "the addon '{}' used to instantiate extension '{}' is not found, \
                 check your addons in ten_packages/extension.",
                 extension.addon,
-                extension.name
+                extension.type_and_name.name
             )
         })
 }
@@ -89,11 +91,11 @@ pub fn get_extension<'a>(
     extensions
         .iter()
         .find(|ext| {
-            ext.node_type == PkgType::Extension
-                && &ext.app == app
+            ext.type_and_name.pkg_type == PkgType::Extension
+                && ext.get_app_uri() == app
                 && ext.extension_group.clone().unwrap_or("".to_string())
                     == *extension_group
-                && &ext.name == extension
+                && &ext.type_and_name.name == extension
         })
         .ok_or_else(|| anyhow::anyhow!("Extension not found"))
 }

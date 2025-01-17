@@ -10,9 +10,11 @@
 
 #include "include_internal/ten_runtime/app/app.h"
 #include "include_internal/ten_runtime/app/predefined_graph.h"
+#include "include_internal/ten_runtime/app/ten_property.h"
 #include "include_internal/ten_runtime/common/constant_str.h"
 #include "include_internal/ten_runtime/common/log.h"
 #include "include_internal/ten_runtime/extension/extension_info/extension_info.h"
+#include "include_internal/ten_runtime/metadata/manifest.h"
 #include "include_internal/ten_utils/log/log.h"
 #include "include_internal/ten_utils/log/output.h"
 #include "ten_runtime/app/app.h"
@@ -86,11 +88,11 @@ bool ten_app_init_uri(ten_app_t *self, ten_value_t *value) {
   ten_string_t default_url;
   ten_string_init_formatted(&default_url, TEN_STR_LOCALHOST);
 
-  const char *url_str = ten_value_peek_string(value)
-                            ? ten_value_peek_string(value)
+  const char *url_str = ten_value_peek_raw_str(value, NULL)
+                            ? ten_value_peek_raw_str(value, NULL)
                             : ten_string_get_raw_str(&default_url);
 
-  ten_string_copy_c_str(&self->uri, url_str, strlen(url_str));
+  ten_string_set_from_c_str(&self->uri, url_str, strlen(url_str));
 
   ten_string_deinit(&default_url);
 
@@ -118,8 +120,8 @@ bool ten_app_init_log_file(ten_app_t *self, ten_value_t *value) {
   ten_string_t log_file;
   ten_string_init(&log_file);
 
-  ten_string_copy_c_str(&log_file, ten_value_peek_string(value),
-                        strlen(ten_value_peek_string(value)));
+  ten_string_init_from_c_str(&log_file, ten_value_peek_raw_str(value, NULL),
+                             strlen(ten_value_peek_raw_str(value, NULL)));
 
   if (!ten_string_is_empty(&log_file)) {
     ten_log_global_set_output_to_file(ten_string_get_raw_str(&log_file));
@@ -180,6 +182,10 @@ bool ten_app_handle_ten_namespace_properties(ten_app_t *self) {
   self->one_event_loop_per_engine = false;
   self->long_running_mode = false;
 
+  // First, set the log-related configuration to default values. This way, if
+  // there are no log-related properties under the `ten` namespace, the default
+  // values will be used.
+  ten_log_global_set_output_to_stderr();
   ten_log_global_set_output_level(DEFAULT_LOG_OUTPUT_LEVEL);
 
   if (!ten_app_determine_ten_namespace_properties(self,
@@ -197,4 +203,16 @@ void ten_app_handle_metadata(ten_app_t *self) {
 
   // Load custom TEN app metadata.
   ten_metadata_load(ten_app_on_configure, self->ten_env);
+}
+
+// This function is quite special; it is specifically designed for extensions to
+// fetch the read-only app manifest content.
+void ten_app_get_extension_dependencies_for_extension(
+    ten_app_t *self, ten_list_t *extension_dependencies) {
+  TEN_ASSERT(self, "Invalid argument.");
+  TEN_ASSERT(ten_app_check_integrity(self, false), "Invalid use of app %p.",
+             self);
+
+  ten_manifest_get_dependencies_type_and_name(
+      &self->manifest, extension_dependencies, NULL, NULL);
 }

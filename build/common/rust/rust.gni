@@ -5,16 +5,22 @@
 # Refer to the "LICENSE" file in the root directory for more information.
 #
 import("//build/options.gni")
+import("//build/ten_rust/options.gni")
 
 template("rust_target") {
-  assert(defined(invoker.project_path), "project_file is not defined")
+  assert(defined(invoker.project_path), "project_path is not defined")
+  assert(defined(invoker.target_path), "target_path is not defined")
   assert(defined(invoker.output_name), "output_name is not defined")
 
   _target_name = target_name
-  target_path = target_gen_dir
+  target_path = invoker.target_path
 
   action("${_target_name}") {
-    script = "//build/common/rust/rust.py"
+    if (ten_enable_serialized_rust_action) {
+      pool = "//:rust_action_pool"
+    }
+
+    script = "//build/common/rust/cargo_build.py"
 
     args = [
       "--project-path",
@@ -42,12 +48,31 @@ template("rust_target") {
       _rustflags = invoker._rustflags
     }
 
-    if (is_debug) {
-      if (ten_enable_rust_asan) {
-        if (enable_sanitizer) {
-          _rustflags = "${_rustflags} -Zsanitizer=address"
-        }
+    if (!ten_rust_enable_gen_cargo_config && enable_sanitizer &&
+        ten_rust_enable_asan) {
+      asan_args = [
+        "--action",
+        "print",
+        "--compiler",
+      ]
+      if (is_clang) {
+        asan_args += [ "clang" ]
+      } else {
+        asan_args += [ "gcc" ]
       }
+
+      asan_args += [
+        "--target-os",
+        target_os,
+        "--target-arch",
+        target_cpu,
+      ]
+
+      flags = exec_script("//build/common/rust/rust_gen_cargo_config.py",
+                          asan_args,
+                          "trim string")
+
+      _rustflags = "${_rustflags} ${flags}"
     }
 
     if (_rustflags != "") {
@@ -68,8 +93,8 @@ template("rust_target") {
 
     # Note that the `target` is required for `cargo build` if the asan is
     # enabled, otherwise the platform-dependent dependencies might not be found,
-    # and there might be asan conflict with the shared libraries depeneded by
-    # the denendencies.
+    # and there might be asan conflict with the shared libraries depended by
+    # the dependencies.
     if (is_win) {
       if (target_cpu == "x86") {
         target = "i686-pc-windows-msvc"
@@ -165,7 +190,11 @@ template("rust_test") {
   tg_timestamp_proxy_file = "${target_path}/${target_name}_rust_tests"
 
   action("${_target_name}") {
-    script = "//build/common/rust/rust_build_tests.py"
+    if (ten_enable_serialized_rust_action) {
+      pool = "//:rust_action_pool"
+    }
+
+    script = "//build/common/rust/cargo_build_tests.py"
 
     args = [
       "--project-path",
@@ -208,12 +237,31 @@ template("rust_test") {
       _rustflags = invoker._rustflags
     }
 
-    if (is_debug) {
-      if (ten_enable_rust_asan) {
-        if (enable_sanitizer) {
-          _rustflags = "${_rustflags} -Zsanitizer=address"
-        }
+    if (!ten_rust_enable_gen_cargo_config && enable_sanitizer &&
+        ten_rust_enable_asan) {
+      asan_args = [
+        "--action",
+        "print",
+        "--compiler",
+      ]
+      if (is_clang) {
+        asan_args += [ "clang" ]
+      } else {
+        asan_args += [ "gcc" ]
       }
+
+      asan_args += [
+        "--target-os",
+        target_os,
+        "--target-arch",
+        target_cpu,
+      ]
+
+      flags = exec_script("//build/common/rust/rust_gen_cargo_config.py",
+                          asan_args,
+                          "trim string")
+
+      _rustflags = "${_rustflags} ${flags}"
     }
 
     if (_rustflags != "") {
@@ -234,8 +282,8 @@ template("rust_test") {
 
     # Note that the `target` is required for `cargo build` if the asan is
     # enabled, otherwise the platform-dependent dependencies might not be found,
-    # and there might be asan conflict with the shared libraries depeneded by
-    # the denendencies.
+    # and there might be asan conflict with the shared libraries depended by
+    # the dependencies.
     if (is_win) {
       if (target_cpu == "x86") {
         target = "i686-pc-windows-msvc"
@@ -308,6 +356,8 @@ template("rust_test") {
   }
 }
 
+# Call rust `cbindgen` to generate binding file for `ten_rust` to be used in C
+# codes.
 template("rust_cbindgen") {
   assert(defined(invoker.config_file), "config_file is not defined")
   assert(defined(invoker.project_path), "project_path is not defined")
@@ -348,6 +398,160 @@ template("rust_cbindgen") {
         inputs += [ "${invoker.project_path}/${f}" ]
       }
     }
+
+    outputs = [ _output ]
+  }
+}
+
+# Generate `ten_framework/.cargo/config.toml` to configure the Rust compiler.
+template("rust_gen_cargo_config") {
+  assert(defined(invoker.project_root), "project_root is not defined")
+
+  _project_root = rebase_path(invoker.project_root)
+  _target_name = target_name
+  _target_path = target_gen_dir
+
+  action("${_target_name}") {
+    script = "//build/common/rust/rust_gen_cargo_config.py"
+    _output = "${_target_path}/${_target_name}_gen_cargo_config"
+
+    args = [
+      "--project-root",
+      _project_root,
+      "--tg-timestamp-proxy-file",
+      rebase_path(_output),
+    ]
+
+    args += [ "--compiler" ]
+    if (is_clang) {
+      args += [ "clang" ]
+    } else {
+      args += [ "gcc" ]
+    }
+
+    if (is_win) {
+      if (target_cpu == "x86") {
+        target = "i686-pc-windows-msvc"
+      } else if (target_cpu == "x64") {
+        target = "x86_64-pc-windows-msvc"
+      } else if (target_cpu == "arm64") {
+        target = "aarch64-pc-windows-msvc"
+      }
+    } else if (is_linux) {
+      if (target_cpu == "arm64") {
+        target = "aarch64-unknown-linux-gnu"
+      } else if (target_cpu == "arm") {
+        target = "armv7-unknown-linux-gnueabi"
+      } else if (target_cpu == "x86") {
+        target = "i686-unknown-linux-gnu"
+      } else if (target_cpu == "x64") {
+        target = "x86_64-unknown-linux-gnu"
+      }
+    } else if (is_mac) {
+      if (target_cpu == "arm64") {
+        target = "aarch64-apple-darwin"
+      } else if (target_cpu == "x86") {
+        target = "i686-apple-darwin"
+      } else if (target_cpu == "x64") {
+        target = "x86_64-apple-darwin"
+      }
+    }
+
+    args += [
+      "--target",
+      target,
+      "--target-os",
+      target_os,
+      "--target-arch",
+      target_cpu,
+    ]
+
+    if (enable_sanitizer && ten_rust_enable_gen_cargo_config) {
+      args += [
+        "--action",
+        "gen",
+      ]
+    } else {
+      # Delete `.cargo/config.toml` file to remove all configurations related to
+      # Rust + ASan.
+      args += [
+        "--action",
+        "delete",
+      ]
+    }
+
+    if (ten_enable_rust_incremental_build == false) {
+      args += [ "--disable-incremental" ]
+    }
+
+    forward_variables_from(invoker,
+                           [
+                             "deps",
+                             "public_deps",
+                             "data_deps",
+                             "public_configs",
+                           ])
+
+    outputs = [ _output ]
+  }
+}
+
+# Call 'cargo clean' clean the target directory.
+template("rust_clean") {
+  _project_path = rebase_path(invoker.project_path)
+  _target_path = rebase_path(invoker.target_path)
+
+  _target_name = target_name
+
+  action("${_target_name}") {
+    script = "//build/common/rust/cargo_clean.py"
+    _output = "${target_gen_dir}/${_target_name}_rust_clean"
+
+    args = [
+      "--project-path",
+      _project_path,
+      "--target-path",
+      _target_path,
+      "--tg-timestamp-proxy-file",
+      rebase_path(_output),
+      "--log-level",
+      "${log_level}",
+    ]
+
+    if (is_win) {
+      if (target_cpu == "x86") {
+        target = "i686-pc-windows-msvc"
+      } else if (target_cpu == "x64") {
+        target = "x86_64-pc-windows-msvc"
+      } else if (target_cpu == "arm64") {
+        target = "aarch64-pc-windows-msvc"
+      }
+    } else if (is_linux) {
+      if (target_cpu == "arm64") {
+        target = "aarch64-unknown-linux-gnu"
+      } else if (target_cpu == "arm") {
+        target = "armv7-unknown-linux-gnueabi"
+      } else if (target_cpu == "x86") {
+        target = "i686-unknown-linux-gnu"
+      } else if (target_cpu == "x64") {
+        target = "x86_64-unknown-linux-gnu"
+      }
+    } else if (is_mac) {
+      if (target_cpu == "arm64") {
+        target = "aarch64-apple-darwin"
+      } else if (target_cpu == "x86") {
+        target = "i686-apple-darwin"
+      } else if (target_cpu == "x64") {
+        target = "x86_64-apple-darwin"
+      }
+    }
+
+    args += [
+      "--target",
+      target,
+    ]
+
+    forward_variables_from(invoker, [ "deps" ])
 
     outputs = [ _output ]
   }

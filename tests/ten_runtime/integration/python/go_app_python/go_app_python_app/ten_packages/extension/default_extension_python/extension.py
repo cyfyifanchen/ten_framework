@@ -9,13 +9,8 @@
 # debugpy.listen(5678)
 # debugpy.wait_for_client()
 
-from ten import (
-    Extension,
-    TenEnv,
-    Cmd,
-    StatusCode,
-    CmdResult,
-)
+from typing import Optional
+from ten import Extension, TenEnv, Cmd, StatusCode, CmdResult, TenError
 
 
 class DefaultExtension(Extension):
@@ -44,21 +39,37 @@ class DefaultExtension(Extension):
         ten_env.on_deinit_done()
 
     def check_greeting(
-        self, ten_env: TenEnv, result: CmdResult, receivedCmd: Cmd
+        self,
+        ten_env: TenEnv,
+        result: Optional[CmdResult],
+        error: Optional[TenError],
+        receivedCmd: Cmd,
     ):
+        if error is not None:
+            assert False, error.err_msg()
+
+        assert result is not None
+
         statusCode = result.get_status_code()
-        detail = result.get_property_string("detail")
-        ten_env.log_info(
-            f"check_greeting: status: {str(statusCode)}, detail: {detail}"
-        )
+        ten_env.log_info(f"check_greeting: status: {str(statusCode)}")
 
         respCmd = CmdResult.create(StatusCode.OK)
-        respCmd.set_property_string("detail", detail + " nbnb")
+        respCmd.set_property_string("detail", "received response")
         ten_env.log_info("create respCmd")
 
         ten_env.return_result(respCmd, receivedCmd)
 
-    def check_hello(self, ten_env: TenEnv, result: CmdResult, receivedCmd: Cmd):
+    def check_hello(
+        self,
+        ten_env: TenEnv,
+        result: Optional[CmdResult],
+        error: Optional[TenError],
+        receivedCmd: Cmd,
+    ):
+        if error is not None:
+            assert False, error.err_msg()
+
+        assert result is not None
         statusCode = result.get_status_code()
         detail = result.get_property_string("detail")
         ten_env.log_info(
@@ -69,11 +80,13 @@ class DefaultExtension(Extension):
         new_cmd = Cmd.create("greeting")
         ten_env.send_cmd(
             new_cmd,
-            lambda ten, result: self.check_greeting(ten, result, receivedCmd),
+            lambda ten_env, result, error: self.check_greeting(
+                ten_env, result, error, receivedCmd
+            ),
         )
 
     def on_cmd(self, ten_env: TenEnv, cmd: Cmd) -> None:
-        cmd_json = cmd.to_json()
+        cmd_json = cmd.get_property_to_json()
         ten_env.log_debug("on_cmd: " + cmd_json)
 
         new_cmd = Cmd.create("hello")
@@ -83,5 +96,8 @@ class DefaultExtension(Extension):
 
         # Send command to a cpp extension.
         ten_env.send_cmd(
-            new_cmd, lambda ten, result: self.check_hello(ten, result, cmd)
+            new_cmd,
+            lambda ten_env, result, error: self.check_hello(
+                ten_env, result, error, cmd
+            ),
         )

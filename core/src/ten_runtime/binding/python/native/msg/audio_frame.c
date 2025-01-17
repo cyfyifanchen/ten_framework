@@ -9,11 +9,11 @@
 #include "include_internal/ten_runtime/binding/python/common/error.h"
 #include "include_internal/ten_runtime/binding/python/msg/msg.h"
 #include "include_internal/ten_runtime/msg/msg.h"
-#include "ten_utils/macro/check.h"
 #include "longobject.h"
 #include "object.h"
 #include "ten_runtime/msg/audio_frame/audio_frame.h"
 #include "ten_runtime/msg/msg.h"
+#include "ten_utils/macro/check.h"
 #include "ten_utils/macro/mark.h"
 
 static ten_py_audio_frame_t *ten_py_audio_frame_create_internal(
@@ -32,23 +32,25 @@ static ten_py_audio_frame_t *ten_py_audio_frame_create_internal(
 }
 
 static ten_py_audio_frame_t *ten_py_audio_frame_init(
-    ten_py_audio_frame_t *py_audio_frame, TEN_UNUSED PyObject *args,
-    TEN_UNUSED PyObject *kw) {
+    ten_py_audio_frame_t *py_audio_frame, const char *name) {
   TEN_ASSERT(py_audio_frame &&
                  ten_py_msg_check_integrity((ten_py_msg_t *)py_audio_frame),
              "Invalid argument.");
 
-  py_audio_frame->msg.c_msg =
-      ten_msg_create_from_msg_type(TEN_MSG_TYPE_AUDIO_FRAME);
+  py_audio_frame->msg.c_msg = ten_audio_frame_create(name, NULL);
 
   return py_audio_frame;
 }
 
-PyObject *ten_py_audio_frame_create(PyTypeObject *type,
-                                    TEN_UNUSED PyObject *args,
+PyObject *ten_py_audio_frame_create(PyTypeObject *type, PyObject *args,
                                     TEN_UNUSED PyObject *kwds) {
+  const char *name = NULL;
+  if (!PyArg_ParseTuple(args, "s", &name)) {
+    return ten_py_raise_py_value_error_exception("Failed to parse arguments.");
+  }
+
   ten_py_audio_frame_t *audio_frame = ten_py_audio_frame_create_internal(type);
-  return (PyObject *)ten_py_audio_frame_init(audio_frame, args, kwds);
+  return (PyObject *)ten_py_audio_frame_init(audio_frame, name);
 }
 
 void ten_py_audio_frame_destroy(PyObject *self) {
@@ -111,7 +113,7 @@ PyObject *ten_py_audio_frame_alloc_buf(PyObject *self, PyObject *args) {
     return ten_py_raise_py_value_error_exception("Invalid video frame size.");
   }
 
-  ten_audio_frame_alloc_data(py_audio_frame->msg.c_msg, size);
+  ten_audio_frame_alloc_buf(py_audio_frame->msg.c_msg, size);
 
   Py_RETURN_NONE;
 }
@@ -125,7 +127,7 @@ PyObject *ten_py_audio_frame_lock_buf(PyObject *self, PyObject *args) {
   ten_error_t err;
   ten_error_init(&err);
 
-  ten_buf_t *data = ten_audio_frame_peek_data(py_audio_frame->msg.c_msg);
+  ten_buf_t *data = ten_audio_frame_peek_buf(py_audio_frame->msg.c_msg);
 
   if (!ten_msg_add_locked_res_buf(py_audio_frame->msg.c_msg, data->data,
                                   &err)) {
@@ -179,7 +181,7 @@ PyObject *ten_py_audio_frame_get_buf(PyObject *self, PyObject *args) {
   ten_error_t err;
   ten_error_init(&err);
 
-  ten_buf_t *data = ten_audio_frame_peek_data(py_audio_frame->msg.c_msg);
+  ten_buf_t *data = ten_audio_frame_peek_buf(py_audio_frame->msg.c_msg);
   if (!data->data) {
     return ten_py_raise_py_system_error_exception("Failed to get buffer.");
   }
@@ -205,12 +207,9 @@ PyObject *ten_py_audio_frame_set_timestamp(PyObject *self, PyObject *args) {
              "Invalid argument.");
 
   int64_t timestamp = 0;
-
-  if (!PyLong_Check(args)) {
-    return NULL;
+  if (!PyArg_ParseTuple(args, "L", &timestamp)) {
+    return ten_py_raise_py_value_error_exception("Invalid timestamp.");
   }
-
-  timestamp = PyLong_AsLongLong(args);
 
   ten_audio_frame_set_timestamp(py_audio_frame->msg.c_msg, timestamp);
 
@@ -389,7 +388,7 @@ PyObject *ten_py_audio_frame_is_eof(PyObject *self, PyObject *args) {
   return PyBool_FromLong(ten_audio_frame_is_eof(py_audio_frame->msg.c_msg));
 }
 
-PyObject *ten_py_audio_frame_set_is_eof(PyObject *self, PyObject *args) {
+PyObject *ten_py_audio_frame_set_eof(PyObject *self, PyObject *args) {
   ten_py_audio_frame_t *py_audio_frame = (ten_py_audio_frame_t *)self;
   TEN_ASSERT(py_audio_frame &&
                  ten_py_msg_check_integrity((ten_py_msg_t *)py_audio_frame),
@@ -400,7 +399,7 @@ PyObject *ten_py_audio_frame_set_is_eof(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  ten_audio_frame_set_is_eof(py_audio_frame->msg.c_msg, is_eof);
+  ten_audio_frame_set_eof(py_audio_frame->msg.c_msg, is_eof);
 
   Py_RETURN_NONE;
 }

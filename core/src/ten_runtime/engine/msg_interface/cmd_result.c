@@ -21,11 +21,12 @@
 #include "include_internal/ten_runtime/path/path_table.h"
 #include "include_internal/ten_runtime/remote/remote.h"
 #include "include_internal/ten_utils/log/log.h"
-#include "ten_utils/macro/check.h"
 #include "ten_runtime/common/status_code.h"
 #include "ten_runtime/msg/msg.h"
 #include "ten_utils/lib/smart_ptr.h"
 #include "ten_utils/lib/string.h"
+#include "ten_utils/macro/check.h"
+#include "ten_utils/value/value_get.h"
 #include "ten_utils/value/value_is.h"
 
 static bool ten_engine_close_duplicated_remote_or_upgrade_it_to_normal(
@@ -91,10 +92,11 @@ static bool ten_engine_handle_cmd_result_for_cmd_start_graph(
                  ten_msg_get_type(cmd_result) == TEN_MSG_TYPE_CMD_RESULT &&
                  ten_msg_get_dest_cnt(cmd_result) == 1,
              "Should not happen.");
-  TEN_ASSERT(
-      ten_string_is_equal(ten_app_get_uri(self->app),
-                          &ten_msg_get_first_dest_loc(cmd_result)->app_uri),
-      "Should not happen.");
+  TEN_ASSERT(ten_c_string_is_equal(
+                 ten_app_get_uri(self->app),
+                 ten_string_get_raw_str(
+                     &ten_msg_get_first_dest_loc(cmd_result)->app_uri)),
+             "Should not happen.");
 
   if (ten_cmd_result_get_status_code(cmd_result) == TEN_STATUS_CODE_OK) {
     if (ten_cmd_base_get_original_connection(cmd_result)) {
@@ -155,9 +157,18 @@ static bool ten_engine_handle_cmd_result_for_cmd_start_graph(
         "The engine should be started because of receiving a 'start_graph' "
         "command.");
 
-    ten_engine_return_error_for_cmd_start_graph(
-        self, original_start_graph_cmd, "Failed to connect to %s",
-        ten_msg_get_src_app_uri(cmd_result));
+    ten_value_t *err_msg_value =
+        ten_msg_peek_property(cmd_result, TEN_STR_DETAIL, NULL);
+    if (err_msg_value) {
+      TEN_ASSERT(ten_value_is_string(err_msg_value), "Should not happen.");
+      ten_engine_return_error_for_cmd_start_graph(
+          self, original_start_graph_cmd,
+          ten_value_peek_raw_str(err_msg_value, err));
+    } else {
+      ten_engine_return_error_for_cmd_start_graph(
+          self, original_start_graph_cmd, "Failed to start engine in app [%s].",
+          ten_msg_get_src_app_uri(cmd_result));
+    }
   } else {
     TEN_ASSERT(0, "Should not happen.");
   }
@@ -167,9 +178,6 @@ static bool ten_engine_handle_cmd_result_for_cmd_start_graph(
   return true;
 }
 
-/**
- * @return true if command is handled, false otherwise.
- */
 void ten_engine_handle_cmd_result(ten_engine_t *self,
                                   ten_shared_ptr_t *cmd_result,
                                   ten_error_t *err) {

@@ -11,12 +11,12 @@
 #include "include_internal/ten_runtime/extension/extension.h"
 #include "include_internal/ten_runtime/extension/msg_handling.h"
 #include "include_internal/ten_runtime/extension_thread/extension_thread.h"
-#include "include_internal/ten_runtime/extension_thread/on_xxx.h"
 #include "include_internal/ten_runtime/msg/cmd_base/cmd_base.h"
 #include "include_internal/ten_runtime/path/path.h"
 #include "include_internal/ten_runtime/path/path_table.h"
 #include "include_internal/ten_runtime/timer/timer.h"
 #include "ten_runtime/msg/cmd_result/cmd_result.h"
+#include "ten_utils/log/log.h"
 
 static bool ten_extension_could_be_closed(ten_extension_t *self) {
   TEN_ASSERT(self && ten_extension_check_integrity(self, true),
@@ -50,9 +50,11 @@ static void ten_extension_thread_process_remaining_paths(
     // Call ten_extension_handle_in_msg to consume cmd results, so that the
     // _OUT_paths can be removed.
     TEN_LOGD("[%s] Flushing %zu remaining out paths.",
-             ten_extension_get_name(extension), out_paths_cnt);
+             ten_extension_get_name(extension, true), out_paths_cnt);
 
     ten_list_t cmd_result_list = TEN_LIST_INIT_VAL;
+
+    // Generate an error result for each remaining out path.
     ten_list_foreach (out_paths, iter) {
       ten_path_t *path = (ten_path_t *)ten_ptr_listnode_get(iter.node);
       TEN_ASSERT(path && ten_path_check_integrity(path, true),
@@ -72,6 +74,7 @@ static void ten_extension_thread_process_remaining_paths(
       ten_shared_ptr_destroy(cmd_result);
     }
 
+    // Send these newly generated error results to the extension.
     ten_list_foreach (&cmd_result_list, iter) {
       ten_shared_ptr_t *cmd_result = ten_smart_ptr_listnode_get(iter.node);
       TEN_ASSERT(cmd_result && ten_cmd_base_check_integrity(cmd_result),

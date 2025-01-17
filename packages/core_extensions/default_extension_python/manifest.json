@@ -1,12 +1,12 @@
 {
   "type": "extension",
   "name": "default_extension_python",
-  "version": "0.1.0",
+  "version": "0.5.1",
   "dependencies": [
     {
       "type": "system",
       "name": "ten_runtime_python",
-      "version": "0.1.0"
+      "version": "0.5.1"
     }
   ],
   "package": {
@@ -16,7 +16,8 @@
       "BUILD.gn",
       "**.tent",
       "**.py",
-      "README.md"
+      "README.md",
+      "tests/**"
     ]
   },
   "api": {}

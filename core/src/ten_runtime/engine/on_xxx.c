@@ -14,6 +14,7 @@
 #include "include_internal/ten_runtime/extension_context/extension_context.h"
 #include "include_internal/ten_runtime/extension_context/ten_env/on_xxx.h"
 #include "include_internal/ten_runtime/extension_group/extension_group.h"
+#include "include_internal/ten_runtime/extension_group/on_xxx.h"
 #include "include_internal/ten_runtime/extension_thread/extension_thread.h"
 #include "include_internal/ten_runtime/extension_thread/on_xxx.h"
 #include "include_internal/ten_runtime/msg/msg.h"
@@ -25,6 +26,7 @@
 #include "ten_utils/lib/smart_ptr.h"
 #include "ten_utils/macro/check.h"
 #include "ten_utils/macro/mark.h"
+#include "ten_utils/macro/memory.h"
 #include "ten_utils/sanitizer/thread_check.h"
 
 static void ten_engine_on_extension_thread_is_ready(
@@ -48,7 +50,7 @@ static void ten_engine_on_extension_thread_is_ready(
   if (extension_context->extension_threads_cnt_of_initted ==
       ten_list_size(&extension_context->extension_threads)) {
     TEN_LOGD("[%s] All extension threads are initted.",
-             ten_engine_get_name(self));
+             ten_engine_get_id(self, true));
 
     // All the extension threads requested by this command have been completed,
     // return the result for this command.
@@ -58,11 +60,10 @@ static void ten_engine_on_extension_thread_is_ready(
     // the whole graph is built-up successfully, so that the client will
     // start to send commands into the graph.
 
-    ten_string_t *graph_name = &self->graph_name;
+    ten_string_t *graph_id = &self->graph_id;
 
-    const char *body_str = ten_string_is_empty(graph_name)
-                               ? ""
-                               : ten_string_get_raw_str(graph_name);
+    const char *body_str =
+        ten_string_is_empty(graph_id) ? "" : ten_string_get_raw_str(graph_id);
 
     ten_shared_ptr_t *state_requester_cmd =
         extension_context->state_requester_cmd;
@@ -78,9 +79,9 @@ static void ten_engine_on_extension_thread_is_ready(
     extension_context->state_requester_cmd = NULL;
 
 #if defined(_DEBUG)
-    ten_msg_dump(
-        returned_cmd, NULL,
-        "Return extension-system-initted-result to previous stage: ^m");
+    // ten_msg_dump(
+    //     returned_cmd, NULL,
+    //     "Return extension-system-initted-result to previous stage: ^m");
 #endif
 
     ten_engine_dispatch_msg(self, returned_cmd);
@@ -91,7 +92,7 @@ static void ten_engine_on_extension_thread_is_ready(
     self->is_ready_to_handle_msg = true;
 
     TEN_LOGD("[%s] Engine is ready to handle messages.",
-             ten_engine_get_name(self));
+             ten_engine_get_id(self, true));
 
     // Because the engine is just ready to handle messages, hence, we trigger
     // the engine to handle any external messages if any.
@@ -131,12 +132,11 @@ void ten_engine_find_extension_info_for_all_extensions_of_extension_thread(
     // Find the extension_info of the specified 'extension'.
     extension->extension_info =
         ten_extension_context_get_extension_info_by_name(
-            extension_context,
-            ten_string_get_raw_str(
-                ten_app_get_uri(extension_context->engine->app)),
-            ten_string_get_raw_str(&extension_context->engine->graph_name),
-            ten_string_get_raw_str(&extension_thread->extension_group->name),
-            ten_string_get_raw_str(&extension->name));
+            extension_context, ten_app_get_uri(extension_context->engine->app),
+            ten_engine_get_id(extension_context->engine, true),
+            ten_extension_group_get_name(extension_thread->extension_group,
+                                         false),
+            ten_extension_get_name(extension, false));
   }
 
   if (extension_thread->is_close_triggered) {
@@ -169,14 +169,14 @@ void ten_engine_on_extension_thread_closed(void *self_, void *arg) {
              "Should not happen.");
 
   TEN_LOGD("[%s] Waiting for extension thread (%p) be reclaimed.",
-           ten_engine_get_name(self), extension_thread);
+           ten_engine_get_id(self, true), extension_thread);
   TEN_UNUSED int rc =
       ten_thread_join(ten_sanitizer_thread_check_get_belonging_thread(
                           &extension_thread->thread_check),
                       -1);
   TEN_ASSERT(!rc, "Should not happen.");
   TEN_LOGD("[%s] Extension thread (%p) is reclaimed.",
-           ten_engine_get_name(self), extension_thread);
+           ten_engine_get_id(self, true), extension_thread);
 
   // Extension thread is disappear, so we migrate the extension_group and
   // extension_thread to the engine thread now.
@@ -198,11 +198,6 @@ void ten_engine_on_addon_create_extension_group_done(void *self_, void *arg) {
   TEN_ASSERT(self && ten_engine_check_integrity(self, true),
              "Should not happen.");
 
-  ten_extension_context_t *extension_context = self->extension_context;
-  TEN_ASSERT(extension_context, "Invalid argument.");
-  TEN_ASSERT(ten_extension_context_check_integrity(extension_context, true),
-             "Invalid use of extension_context %p.", extension_context);
-
   ten_extension_context_on_addon_create_extension_group_done_info_t *info = arg;
   TEN_ASSERT(info, "Should not happen.");
 
@@ -215,7 +210,7 @@ void ten_engine_on_addon_create_extension_group_done(void *self_, void *arg) {
              "Should not happen.");
 
   ten_extension_context_on_addon_create_extension_group_done(
-      extension_context->ten_env, extension_group, info->addon_context);
+      self->ten_env, extension_group, info->addon_context);
 
   ten_extension_context_on_addon_create_extension_group_done_info_destroy(info);
 }
@@ -225,16 +220,49 @@ void ten_engine_on_addon_destroy_extension_group_done(void *self_, void *arg) {
   TEN_ASSERT(self && ten_engine_check_integrity(self, true),
              "Should not happen.");
 
-  ten_extension_context_t *extension_context = self->extension_context;
-  TEN_ASSERT(extension_context, "Invalid argument.");
-  TEN_ASSERT(ten_extension_context_check_integrity(extension_context, true),
-             "Invalid use of extension_context %p.", extension_context);
-
   ten_addon_context_t *addon_context = arg;
   TEN_ASSERT(addon_context, "Should not happen.");
 
   // This happens on the engine thread, so it's thread safe.
 
-  ten_extension_context_on_addon_destroy_extension_group_done(
-      extension_context->ten_env, addon_context);
+  ten_extension_context_on_addon_destroy_extension_group_done(self->ten_env,
+                                                              addon_context);
+}
+
+ten_engine_thread_on_addon_create_protocol_done_info_t *
+ten_engine_thread_on_addon_create_protocol_done_info_create(void) {
+  ten_engine_thread_on_addon_create_protocol_done_info_t *self = TEN_MALLOC(
+      sizeof(ten_engine_thread_on_addon_create_protocol_done_info_t));
+
+  self->protocol = NULL;
+  self->addon_context = NULL;
+
+  return self;
+}
+
+static void ten_engine_thread_on_addon_create_protocol_done_info_destroy(
+    ten_engine_thread_on_addon_create_protocol_done_info_t *self) {
+  TEN_ASSERT(self, "Invalid argument.");
+  TEN_FREE(self);
+}
+
+void ten_engine_thread_on_addon_create_protocol_done(void *self, void *arg) {
+  ten_engine_t *engine = self;
+  TEN_ASSERT(engine && ten_engine_check_integrity(engine, true),
+             "Should not happen.");
+
+  ten_engine_thread_on_addon_create_protocol_done_info_t *info = arg;
+  TEN_ASSERT(info, "Should not happen.");
+
+  ten_protocol_t *protocol = info->protocol;
+  ten_addon_context_t *addon_context = info->addon_context;
+  TEN_ASSERT(addon_context, "Should not happen.");
+
+  if (addon_context->create_instance_done_cb) {
+    addon_context->create_instance_done_cb(
+        engine->ten_env, protocol, addon_context->create_instance_done_cb_data);
+  }
+
+  ten_addon_context_destroy(addon_context);
+  ten_engine_thread_on_addon_create_protocol_done_info_destroy(info);
 }

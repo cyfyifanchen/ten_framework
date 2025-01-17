@@ -103,8 +103,8 @@ done:
 }
 
 PyObject *ten_py_ten_env_get_property_to_json(PyObject *self, PyObject *args) {
-  ten_py_ten_env_t *py_ten = (ten_py_ten_env_t *)self;
-  TEN_ASSERT(py_ten && ten_py_ten_env_check_integrity(py_ten),
+  ten_py_ten_env_t *py_ten_env = (ten_py_ten_env_t *)self;
+  TEN_ASSERT(py_ten_env && ten_py_ten_env_check_integrity(py_ten_env),
              "Invalid argument.");
 
   if (PyTuple_GET_SIZE(args) != 1) {
@@ -119,7 +119,7 @@ PyObject *ten_py_ten_env_get_property_to_json(PyObject *self, PyObject *args) {
   }
 
   ten_value_t *value =
-      ten_py_ten_property_get_and_check_if_exists(py_ten, path);
+      ten_py_ten_property_get_and_check_if_exists(py_ten_env, path);
   if (!value) {
     return ten_py_raise_py_value_error_exception("Failed to get property.");
   }
@@ -148,8 +148,8 @@ PyObject *ten_py_ten_env_get_property_to_json(PyObject *self, PyObject *args) {
 }
 
 PyObject *ten_py_ten_env_get_property_int(PyObject *self, PyObject *args) {
-  ten_py_ten_env_t *py_ten = (ten_py_ten_env_t *)self;
-  TEN_ASSERT(py_ten && ten_py_ten_env_check_integrity(py_ten),
+  ten_py_ten_env_t *py_ten_env = (ten_py_ten_env_t *)self;
+  TEN_ASSERT(py_ten_env && ten_py_ten_env_check_integrity(py_ten_env),
              "Invalid argument.");
 
   if (PyTuple_GET_SIZE(args) != 1) {
@@ -164,7 +164,7 @@ PyObject *ten_py_ten_env_get_property_int(PyObject *self, PyObject *args) {
   }
 
   ten_value_t *value =
-      ten_py_ten_property_get_and_check_if_exists(py_ten, path);
+      ten_py_ten_property_get_and_check_if_exists(py_ten_env, path);
   if (!value) {
     return ten_py_raise_py_value_error_exception("Failed to get property.");
   }
@@ -187,8 +187,8 @@ PyObject *ten_py_ten_env_get_property_int(PyObject *self, PyObject *args) {
 }
 
 PyObject *ten_py_ten_env_get_property_string(PyObject *self, PyObject *args) {
-  ten_py_ten_env_t *py_ten = (ten_py_ten_env_t *)self;
-  TEN_ASSERT(py_ten && ten_py_ten_env_check_integrity(py_ten),
+  ten_py_ten_env_t *py_ten_env = (ten_py_ten_env_t *)self;
+  TEN_ASSERT(py_ten_env && ten_py_ten_env_check_integrity(py_ten_env),
              "Invalid argument.");
 
   if (PyTuple_GET_SIZE(args) != 1) {
@@ -203,13 +203,21 @@ PyObject *ten_py_ten_env_get_property_string(PyObject *self, PyObject *args) {
   }
 
   ten_value_t *value =
-      ten_py_ten_property_get_and_check_if_exists(py_ten, path);
+      ten_py_ten_property_get_and_check_if_exists(py_ten_env, path);
   if (!value) {
-    return ten_py_raise_py_value_error_exception("Failed to get property.");
+    return ten_py_raise_py_value_error_exception("Property [%s] is not found.",
+                                                 path);
   }
 
-  const char *str_value = ten_value_peek_c_str(value);
+  const char *str_value = ten_value_peek_raw_str(value, NULL);
+  if (!str_value) {
+    ten_value_destroy(value);
 
+    return ten_py_raise_py_value_error_exception(
+        "Property [%s] is not a string.", path);
+  }
+
+  // Note that `PyUnicode_FromString()` can not accept NULL.
   PyObject *result = PyUnicode_FromString(str_value);
 
   ten_value_destroy(value);
@@ -217,8 +225,8 @@ PyObject *ten_py_ten_env_get_property_string(PyObject *self, PyObject *args) {
 }
 
 PyObject *ten_py_ten_env_get_property_bool(PyObject *self, PyObject *args) {
-  ten_py_ten_env_t *py_ten = (ten_py_ten_env_t *)self;
-  TEN_ASSERT(py_ten && ten_py_ten_env_check_integrity(py_ten),
+  ten_py_ten_env_t *py_ten_env = (ten_py_ten_env_t *)self;
+  TEN_ASSERT(py_ten_env && ten_py_ten_env_check_integrity(py_ten_env),
              "Invalid argument.");
 
   if (PyTuple_GET_SIZE(args) != 1) {
@@ -233,7 +241,7 @@ PyObject *ten_py_ten_env_get_property_bool(PyObject *self, PyObject *args) {
   }
 
   ten_value_t *value =
-      ten_py_ten_property_get_and_check_if_exists(py_ten, path);
+      ten_py_ten_property_get_and_check_if_exists(py_ten_env, path);
   if (!value) {
     return ten_py_raise_py_value_error_exception("Failed to get property.");
   }
@@ -256,8 +264,8 @@ PyObject *ten_py_ten_env_get_property_bool(PyObject *self, PyObject *args) {
 }
 
 PyObject *ten_py_ten_env_get_property_float(PyObject *self, PyObject *args) {
-  ten_py_ten_env_t *py_ten = (ten_py_ten_env_t *)self;
-  TEN_ASSERT(py_ten && ten_py_ten_env_check_integrity(py_ten),
+  ten_py_ten_env_t *py_ten_env = (ten_py_ten_env_t *)self;
+  TEN_ASSERT(py_ten_env && ten_py_ten_env_check_integrity(py_ten_env),
              "Invalid argument.");
 
   if (PyTuple_GET_SIZE(args) != 1) {
@@ -272,7 +280,7 @@ PyObject *ten_py_ten_env_get_property_float(PyObject *self, PyObject *args) {
   }
 
   ten_value_t *value =
-      ten_py_ten_property_get_and_check_if_exists(py_ten, path);
+      ten_py_ten_property_get_and_check_if_exists(py_ten_env, path);
   if (!value) {
     return ten_py_raise_py_value_error_exception("Failed to get property.");
   }
@@ -295,8 +303,8 @@ PyObject *ten_py_ten_env_get_property_float(PyObject *self, PyObject *args) {
 }
 
 PyObject *ten_py_ten_env_is_property_exist(PyObject *self, PyObject *args) {
-  ten_py_ten_env_t *py_ten = (ten_py_ten_env_t *)self;
-  TEN_ASSERT(py_ten && ten_py_ten_env_check_integrity(py_ten),
+  ten_py_ten_env_t *py_ten_env = (ten_py_ten_env_t *)self;
+  TEN_ASSERT(py_ten_env && ten_py_ten_env_check_integrity(py_ten_env),
              "Invalid argument.");
 
   if (PyTuple_GET_SIZE(args) != 1) {
@@ -310,17 +318,12 @@ PyObject *ten_py_ten_env_is_property_exist(PyObject *self, PyObject *args) {
         "Failed to parse argument when ten_env.is_property_exist.");
   }
 
-  ten_error_t err;
-  ten_error_init(&err);
-
-  bool is_exist = ten_env_is_property_exist(py_ten->c_ten_env, path, &err);
-  if (!ten_error_is_success(&err)) {
-    ten_error_deinit(&err);
-
-    return ten_py_raise_py_value_error_exception(
-        "Failed to check if property exists.");
+  ten_value_t *value =
+      ten_py_ten_property_get_and_check_if_exists(py_ten_env, path);
+  if (!value) {
+    return PyBool_FromLong(false);
   }
 
-  ten_error_deinit(&err);
-  return PyBool_FromLong(is_exist);
+  ten_value_destroy(value);
+  return PyBool_FromLong(true);
 }

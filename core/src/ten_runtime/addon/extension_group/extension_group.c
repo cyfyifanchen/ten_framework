@@ -11,7 +11,6 @@
 #include "include_internal/ten_runtime/engine/engine.h"
 #include "include_internal/ten_runtime/extension_group/extension_group.h"
 #include "include_internal/ten_runtime/ten_env/ten_env.h"
-#include "ten_runtime/addon/extension_group/extension_group.h"
 #include "ten_utils/macro/check.h"
 
 static ten_addon_store_t g_extension_group_store = {
@@ -20,26 +19,26 @@ static ten_addon_store_t g_extension_group_store = {
     TEN_LIST_INIT_VAL,
 };
 
-ten_addon_store_t *ten_extension_group_get_store(void) {
+ten_addon_store_t *ten_extension_group_get_global_store(void) {
+  ten_addon_store_init(&g_extension_group_store);
   return &g_extension_group_store;
 }
 
 ten_addon_host_t *ten_addon_register_extension_group(const char *name,
-                                                     ten_addon_t *addon) {
+                                                     const char *base_dir,
+                                                     ten_addon_t *addon,
+                                                     void *register_ctx) {
   if (!name || strlen(name) == 0) {
     TEN_LOGE("The addon name is required.");
     exit(EXIT_FAILURE);
   }
 
-  ten_addon_store_init(ten_extension_group_get_store());
-
   ten_addon_host_t *addon_host =
       ten_addon_host_create(TEN_ADDON_TYPE_EXTENSION_GROUP);
   TEN_ASSERT(addon_host, "Should not happen.");
 
-  ten_addon_register(ten_extension_group_get_store(), addon_host, name, addon);
-  TEN_LOGI("Registered addon '%s' as extension group",
-           ten_string_get_raw_str(&addon_host->name));
+  ten_addon_register(ten_extension_group_get_global_store(), addon_host, name,
+                     base_dir, addon);
 
   return addon_host;
 }
@@ -47,12 +46,12 @@ ten_addon_host_t *ten_addon_register_extension_group(const char *name,
 ten_addon_t *ten_addon_unregister_extension_group(const char *name) {
   TEN_ASSERT(name, "Should not happen.");
 
-  return ten_addon_unregister(ten_extension_group_get_store(), name);
+  return ten_addon_unregister(ten_extension_group_get_global_store(), name);
 }
 
-bool ten_addon_extension_group_create(
+bool ten_addon_create_extension_group(
     ten_env_t *ten_env, const char *addon_name, const char *instance_name,
-    ten_env_addon_on_create_instance_async_cb_t cb, void *user_data) {
+    ten_env_addon_create_instance_done_cb_t cb, void *user_data) {
   TEN_ASSERT(addon_name && instance_name, "Should not happen.");
   TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
              "Should not happen.");
@@ -74,9 +73,9 @@ bool ten_addon_extension_group_create(
                                          user_data);
 }
 
-bool ten_addon_extension_group_destroy(
+bool ten_addon_destroy_extension_group(
     ten_env_t *ten_env, ten_extension_group_t *extension_group,
-    ten_env_addon_on_destroy_instance_async_cb_t cb, void *cb_data) {
+    ten_env_addon_destroy_instance_done_cb_t cb, void *cb_data) {
   TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true) && cb,
              "Should not happen.");
   TEN_ASSERT(extension_group &&

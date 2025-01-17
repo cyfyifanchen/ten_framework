@@ -9,6 +9,7 @@
 #include "ten_runtime/ten_config.h"
 
 #include "include_internal/ten_runtime/common/loc.h"
+#include "include_internal/ten_runtime/msg/loop_fields.h"
 #include "ten_runtime/msg/msg.h"
 #include "ten_utils/container/list.h"
 #include "ten_utils/macro/check.h"
@@ -34,12 +35,6 @@ static_assert(sizeof(TEN_MSG_TYPE) == sizeof(uint32_t),
 //     must uniquely map to one actual type of the msg instance; otherwise, an
 //     error will be thrown.
 //
-// - msg types do not have `create` functions nor `create_from_json` functions.
-//
-// - Only cmd/data/audio_frame/video_frame and the specialized classes of these
-//   four categories (e.g., connect, stop_graph commands) have `create` and
-//   `create_from_json` functions.
-//
 //   - If the json contains the fields `ten::type` and `ten::name`, these fields
 //     must uniquely map to the actual type of the msg instance; otherwise, an
 //     error will be thrown.
@@ -54,7 +49,7 @@ typedef struct ten_msg_t {
   // specify different names to flow to different destination extensions. If a
   // message's name is empty, it can only flow to the destinations in the graph
   // that have not specified a name.
-  ten_string_t name;
+  ten_value_t name;  // string
 
   ten_loc_t src_loc;
   ten_list_t dest_loc;
@@ -95,14 +90,14 @@ TEN_RUNTIME_PRIVATE_API void ten_msg_clear_and_set_dest_from_msg_src(
     ten_shared_ptr_t *self, ten_shared_ptr_t *cmd);
 
 TEN_RUNTIME_PRIVATE_API void ten_raw_msg_add_dest(
-    ten_msg_t *self, const char *app_uri, const char *graph_name,
+    ten_msg_t *self, const char *app_uri, const char *graph_id,
     const char *extension_group_name, const char *extension_name);
 
 TEN_RUNTIME_PRIVATE_API void ten_raw_msg_clear_dest(ten_msg_t *self);
 
 TEN_RUNTIME_PRIVATE_API bool ten_msg_src_is_empty(ten_shared_ptr_t *self);
 
-TEN_RUNTIME_PRIVATE_API const char *ten_msg_get_src_graph_name(
+TEN_RUNTIME_PRIVATE_API const char *ten_msg_get_src_graph_id(
     ten_shared_ptr_t *self);
 
 TEN_RUNTIME_PRIVATE_API const char *ten_msg_get_first_dest_uri(
@@ -117,12 +112,12 @@ TEN_RUNTIME_PRIVATE_API ten_loc_t *ten_raw_msg_get_first_dest_loc(
     ten_msg_t *self);
 
 TEN_RUNTIME_PRIVATE_API void ten_raw_msg_set_src(
-    ten_msg_t *self, const char *app_uri, const char *graph_name,
+    ten_msg_t *self, const char *app_uri, const char *graph_id,
     const char *extension_group_name, const char *extension_name);
 
 TEN_RUNTIME_PRIVATE_API void ten_msg_set_src(ten_shared_ptr_t *self,
                                              const char *app_uri,
-                                             const char *graph_name,
+                                             const char *graph_id,
                                              const char *extension_group_name,
                                              const char *extension_name);
 
@@ -131,7 +126,7 @@ TEN_RUNTIME_PRIVATE_API void ten_msg_set_src_uri(ten_shared_ptr_t *self,
 
 TEN_RUNTIME_PRIVATE_API bool ten_msg_src_uri_is_empty(ten_shared_ptr_t *self);
 
-TEN_RUNTIME_PRIVATE_API bool ten_msg_src_graph_name_is_empty(
+TEN_RUNTIME_PRIVATE_API bool ten_msg_src_graph_id_is_empty(
     ten_shared_ptr_t *self);
 
 TEN_RUNTIME_PRIVATE_API void ten_msg_set_src_uri_if_empty(
@@ -158,9 +153,6 @@ TEN_RUNTIME_PRIVATE_API const char *ten_raw_msg_get_type_string(
 
 TEN_RUNTIME_PRIVATE_API void ten_msg_clear_and_set_dest_from_extension_info(
     ten_shared_ptr_t *self, ten_extension_info_t *extension_info);
-
-TEN_RUNTIME_PRIVATE_API void ten_msg_clear_and_set_dest_to_extension(
-    ten_shared_ptr_t *self, ten_extension_t *extension);
 
 TEN_RUNTIME_PRIVATE_API void ten_msg_correct_dest(ten_shared_ptr_t *msg,
                                                   ten_engine_t *engine);
@@ -248,6 +240,12 @@ TEN_RUNTIME_PRIVATE_API TEN_MSG_TYPE ten_msg_type_from_type_and_name_string(
 TEN_RUNTIME_PRIVATE_API const char *ten_msg_get_type_string(
     ten_shared_ptr_t *self);
 
+TEN_RUNTIME_PRIVATE_API TEN_MSG_TYPE
+ten_msg_type_from_type_string(const char *type_str);
+
+TEN_RUNTIME_PRIVATE_API TEN_MSG_TYPE
+ten_msg_type_from_unique_name_string(const char *name_str);
+
 // Debug only.
 TEN_RUNTIME_PRIVATE_API bool ten_raw_msg_dump(ten_msg_t *msg, ten_error_t *err,
                                               const char *fmt, ...);
@@ -263,13 +261,21 @@ TEN_RUNTIME_PRIVATE_API bool ten_msg_validate_schema(
     ten_shared_ptr_t *self, ten_schema_store_t *schema_store, bool is_msg_out,
     ten_error_t *err);
 
-TEN_RUNTIME_PRIVATE_API bool ten_raw_msg_get_field_from_json(ten_msg_t *self,
-                                                             ten_json_t *json,
-                                                             ten_error_t *err);
+TEN_RUNTIME_PRIVATE_API bool
+ten_raw_msg_get_one_field_from_json_include_internal_field(
+    ten_msg_t *self, ten_msg_field_process_data_t *field, void *user_data,
+    ten_error_t *err);
 
-TEN_RUNTIME_PRIVATE_API bool ten_raw_msg_put_field_to_json(ten_msg_t *self,
-                                                           ten_json_t *json,
-                                                           ten_error_t *err);
+TEN_RUNTIME_PRIVATE_API bool ten_raw_msg_put_one_field_to_json(
+    ten_msg_t *self, ten_msg_field_process_data_t *field, void *user_data,
+    ten_error_t *err);
+
+TEN_RUNTIME_PRIVATE_API ten_json_t *ten_msg_to_json_include_internal_field(
+    ten_shared_ptr_t *self, ten_error_t *err);
+
+TEN_RUNTIME_PRIVATE_API bool ten_raw_msg_process_field(
+    ten_msg_t *self, ten_raw_msg_process_one_field_func_t cb, void *user_data,
+    ten_error_t *err);
 
 TEN_RUNTIME_PRIVATE_API const char *ten_msg_get_src_app_uri(
     ten_shared_ptr_t *self);
@@ -288,49 +294,29 @@ TEN_RUNTIME_PRIVATE_API void ten_msg_clear_dest(ten_shared_ptr_t *self);
 TEN_RUNTIME_API ten_shared_ptr_t *ten_msg_create_from_msg_type(
     TEN_MSG_TYPE msg_type);
 
-TEN_RUNTIME_API ten_shared_ptr_t *ten_msg_create_from_json(ten_json_t *json,
-                                                           ten_error_t *err);
-
-TEN_RUNTIME_PRIVATE_API ten_shared_ptr_t *ten_msg_create_from_json_string(
-    const char *json_str, ten_error_t *err);
-
 TEN_RUNTIME_API void ten_raw_msg_destroy(ten_msg_t *self);
-
-TEN_RUNTIME_API const char *ten_msg_json_get_string_field_in_ten(
-    ten_json_t *json, const char *field);
-
-TEN_RUNTIME_PRIVATE_API bool ten_msg_json_get_is_ten_field_exist(
-    ten_json_t *json, const char *field);
-
-TEN_RUNTIME_API int64_t
-ten_msg_json_get_integer_field_in_ten(ten_json_t *json, const char *field);
-
-TEN_RUNTIME_PRIVATE_API TEN_MSG_TYPE
-ten_msg_json_get_msg_type(ten_json_t *json);
-
-TEN_RUNTIME_API const char *ten_raw_msg_get_name(ten_msg_t *self);
-
-TEN_RUNTIME_API bool ten_raw_msg_set_name_with_size(ten_msg_t *self,
-                                                    const char *msg_name,
-                                                    size_t msg_name_len,
-                                                    ten_error_t *err);
 
 TEN_RUNTIME_PRIVATE_API bool ten_raw_msg_set_name(ten_msg_t *self,
                                                   const char *msg_name,
                                                   ten_error_t *err);
 
+TEN_RUNTIME_PRIVATE_API bool ten_raw_msg_set_name_with_len(ten_msg_t *self,
+                                                           const char *msg_name,
+                                                           size_t msg_name_len,
+                                                           ten_error_t *err);
+
 /**
- * @brief Set the 'graph_name' in the dest loc to the specified value.
+ * @brief Set the 'graph_id' in the dest loc to the specified value.
  */
 TEN_RUNTIME_PRIVATE_API void
 ten_msg_set_dest_engine_if_unspecified_or_predefined_graph_name(
     ten_shared_ptr_t *self, ten_engine_t *target_engine,
     ten_list_t *predefined_graph_infos);
 
-TEN_RUNTIME_API bool ten_msg_set_name_with_size(ten_shared_ptr_t *self,
-                                                const char *msg_name,
-                                                size_t msg_name_len,
-                                                ten_error_t *err);
+TEN_RUNTIME_PRIVATE_API bool ten_msg_set_name_with_len(ten_shared_ptr_t *self,
+                                                       const char *msg_name,
+                                                       size_t msg_name_len,
+                                                       ten_error_t *err);
 
 inline TEN_MSG_TYPE ten_raw_msg_get_type(ten_msg_t *self) {
   TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");

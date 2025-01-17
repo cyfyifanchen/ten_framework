@@ -14,16 +14,21 @@ typedef struct ten_engine_t ten_engine_t;
 typedef struct ten_remote_t ten_remote_t;
 typedef struct ten_connection_t ten_connection_t;
 
-TEN_RUNTIME_PRIVATE_API void ten_engine_add_remote(ten_engine_t *self,
-                                                   ten_remote_t *remote);
+typedef void (*ten_engine_on_remote_created_cb_t)(ten_engine_t *engine,
+                                                  ten_remote_t *remote,
+                                                  void *user_data);
+typedef void (*ten_engine_on_connected_to_graph_remote_cb_t)(
+    ten_engine_t *engine, bool success, void *user_data);
 
-TEN_RUNTIME_PRIVATE_API void ten_engine_add_weak_remote(ten_engine_t *self,
-                                                        ten_remote_t *remote);
+typedef struct ten_engine_on_protocol_created_info_t {
+  ten_engine_on_remote_created_cb_t cb;
+  void *user_data;
+} ten_engine_on_protocol_created_info_t;
 
 TEN_RUNTIME_PRIVATE_API void ten_engine_upgrade_weak_remote_to_normal_remote(
     ten_engine_t *self, ten_remote_t *remote);
 
-TEN_RUNTIME_PRIVATE_API void ten_engine_connect_to_graph_remote(
+TEN_RUNTIME_PRIVATE_API bool ten_engine_connect_to_graph_remote(
     ten_engine_t *self, const char *uri, ten_shared_ptr_t *cmd);
 
 TEN_RUNTIME_PRIVATE_API void ten_engine_route_msg_to_remote(
@@ -43,9 +48,6 @@ TEN_RUNTIME_PRIVATE_API void ten_engine_on_remote_closed(ten_remote_t *remote,
 
 TEN_RUNTIME_PRIVATE_API bool ten_engine_receive_msg_from_remote(
     ten_remote_t *remote, ten_shared_ptr_t *msg, void *user_data);
-
-TEN_RUNTIME_PRIVATE_API ten_remote_t *ten_engine_find_remote(ten_engine_t *self,
-                                                             const char *uri);
 
 TEN_RUNTIME_PRIVATE_API void ten_engine_link_connection_to_remote(
     ten_engine_t *self, ten_connection_t *connection, const char *uri);

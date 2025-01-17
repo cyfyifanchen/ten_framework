@@ -1,19 +1,20 @@
 //
+// Copyright © 2024 Agora
 // This file is part of TEN Framework, an open source project.
-// Licensed under the Apache License, Version 2.0.
-// See the LICENSE file for more information.
+// Licensed under the Apache License, Version 2.0, with certain conditions.
+// Refer to the "LICENSE" file in the root directory for more information.
 //
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "include_internal/ten_runtime/addon/addon.h"
+#include "include_internal/ten_runtime/addon/extension_group/extension_group.h"
 #include "include_internal/ten_runtime/common/constant_str.h"
 #include "include_internal/ten_runtime/extension/extension_addon_and_instance_name_pair.h"
 #include "include_internal/ten_runtime/extension_group/extension_group.h"
 #include "include_internal/ten_runtime/ten_env/metadata.h"
 #include "include_internal/ten_runtime/ten_env/ten_env.h"
 #include "ten_runtime/addon/addon.h"
-#include "ten_runtime/addon/extension_group/extension_group.h"
 #include "ten_runtime/extension_group/extension_group.h"
 #include "ten_runtime/ten.h"
 #include "ten_runtime/ten_env/internal/log.h"
@@ -120,11 +121,10 @@ static void ten_builtin_extension_group_on_create_extensions(
     ten_string_t *extension_addon_name = &extension_name_info->addon_name;
     ten_string_t *extension_instance_name = &extension_name_info->instance_name;
 
-    bool res = ten_addon_create_extension_async(
+    bool res = ten_addon_create_extension(
         ten_env, ten_string_get_raw_str(extension_addon_name),
         ten_string_get_raw_str(extension_instance_name),
-        (ten_env_addon_on_create_instance_async_cb_t)
-            on_addon_create_instance_done,
+        (ten_env_addon_create_instance_done_cb_t)on_addon_create_instance_done,
         result, NULL);
 
     if (!res) {
@@ -155,8 +155,8 @@ static void ten_builtin_extension_group_on_destroy_extensions(
     TEN_ASSERT(extension && ten_extension_check_integrity(extension, true),
                "Invalid argument.");
 
-    ten_addon_destroy_extension_async(
-        ten_env, extension, on_addon_destroy_instance_done, NULL, NULL);
+    ten_addon_destroy_extension(ten_env, extension,
+                                on_addon_destroy_instance_done, NULL, NULL);
   }
 }
 
@@ -208,16 +208,15 @@ static ten_addon_t builtin_extension_group_addon = {
     TEN_ADDON_SIGNATURE,
     ten_builtin_extension_group_addon_on_init,
     NULL,
-    NULL,
-    NULL,
     ten_builtin_extension_group_addon_create_instance,
     ten_builtin_extension_group_addon_destroy_instance,
+    NULL,
     NULL,
 };
 
 void ten_builtin_extension_group_addon_register(void) {
-  ten_addon_register_extension_group(TEN_STR_DEFAULT_EXTENSION_GROUP,
-                                     &builtin_extension_group_addon);
+  ten_addon_register_extension_group(TEN_STR_DEFAULT_EXTENSION_GROUP, NULL,
+                                     &builtin_extension_group_addon, NULL);
 }
 
 void ten_builtin_extension_group_addon_unregister(void) {

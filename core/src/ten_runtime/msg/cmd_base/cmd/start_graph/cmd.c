@@ -11,6 +11,7 @@
 #include <time.h>
 
 #include "include_internal/ten_runtime/app/app.h"
+#include "include_internal/ten_runtime/common/constant_str.h"
 #include "include_internal/ten_runtime/common/loc.h"
 #include "include_internal/ten_runtime/extension/extension.h"
 #include "include_internal/ten_runtime/extension/extension_addon_and_instance_name_pair.h"
@@ -22,6 +23,7 @@
 #include "include_internal/ten_runtime/msg/cmd_base/cmd/start_graph/cmd.h"
 #include "include_internal/ten_runtime/msg/cmd_base/cmd/start_graph/field/field_info.h"
 #include "include_internal/ten_runtime/msg/msg.h"
+#include "include_internal/ten_utils/value/value_set.h"
 #include "ten_runtime/app/app.h"
 #include "ten_utils/container/list.h"
 #include "ten_utils/container/list_node.h"
@@ -31,6 +33,8 @@
 #include "ten_utils/lib/string.h"
 #include "ten_utils/macro/check.h"
 #include "ten_utils/macro/mark.h"
+#include "ten_utils/value/value.h"
+#include "ten_utils/value/value_get.h"
 
 static ten_cmd_start_graph_t *get_raw_cmd(ten_shared_ptr_t *self) {
   TEN_ASSERT(self && ten_cmd_base_check_integrity(self), "Should not happen.");
@@ -45,7 +49,8 @@ static void ten_raw_cmd_start_graph_destroy(ten_cmd_start_graph_t *self) {
   ten_list_clear(&self->extension_groups_info);
   ten_list_clear(&self->extensions_info);
 
-  ten_string_deinit(&self->predefined_graph_name);
+  ten_value_deinit(&self->long_running_mode);
+  ten_value_deinit(&self->predefined_graph_name);
 
   TEN_FREE(self);
 }
@@ -66,8 +71,8 @@ ten_cmd_start_graph_t *ten_raw_cmd_start_graph_create(void) {
   ten_list_init(&self->extension_groups_info);
   ten_list_init(&self->extensions_info);
 
-  self->long_running_mode = false;
-  ten_string_init(&self->predefined_graph_name);
+  ten_value_init_bool(&self->long_running_mode, false);
+  ten_value_init_string(&self->predefined_graph_name);
 
   return self;
 }
@@ -77,58 +82,97 @@ ten_shared_ptr_t *ten_cmd_start_graph_create(void) {
                                ten_raw_cmd_start_graph_destroy);
 }
 
-static bool ten_raw_cmd_start_graph_init_from_json(ten_cmd_start_graph_t *self,
-                                                   ten_json_t *json,
-                                                   ten_error_t *err) {
-  TEN_ASSERT(self && ten_raw_cmd_check_integrity((ten_cmd_t *)self),
-             "Should not happen.");
-  TEN_ASSERT(json && ten_json_check_integrity(json), "Should not happen.");
+static bool ten_raw_cmd_start_graph_as_msg_get_graph_from_json(
+    ten_msg_t *self, ten_msg_field_process_data_t *field, void *user_data,
+    ten_error_t *err) {
+  TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
+  TEN_ASSERT(field, "Should not happen.");
+  TEN_ASSERT(
+      field->field_value && ten_value_check_integrity(field->field_value),
+      "Should not happen.");
 
-  for (size_t i = 0; i < ten_cmd_start_graph_fields_info_size; ++i) {
-    ten_msg_get_field_from_json_func_t get_field_from_json =
-        ten_cmd_start_graph_fields_info[i].get_field_from_json;
-    if (get_field_from_json) {
-      if (!get_field_from_json((ten_msg_t *)self, json, err)) {
-        return false;
+  if (ten_c_string_is_equal(field->field_name, TEN_STR_NODES) ||
+      ten_c_string_is_equal(field->field_name, TEN_STR_CONNECTIONS)) {
+    ten_json_t *json = (ten_json_t *)user_data;
+    TEN_ASSERT(json, "Should not happen.");
+
+    json = ten_json_object_peek(json, field->field_name);
+    if (!json) {
+      // Some fields are optional, and it is allowed for the corresponding
+      // JSON block to be absent during deserialization.
+      return true;
+    }
+
+    if (!ten_value_set_from_json(field->field_value, json)) {
+      // If the field value cannot be set from the JSON, it means that the
+      // JSON format is incorrect.
+      if (err) {
+        ten_error_set(err, TEN_ERRNO_INVALID_JSON,
+                      "Invalid JSON format for field %s.", field->field_name);
       }
+
+      return false;
     }
   }
+
+  // During JSON deserialization, the field value may be modified, so we set the
+  // value_is_changed_after_process flag.
+  field->value_is_changed_after_process = true;
 
   return true;
 }
 
-bool ten_raw_cmd_start_graph_as_msg_init_from_json(ten_msg_t *self,
-                                                   ten_json_t *json,
-                                                   ten_error_t *err) {
+bool ten_raw_cmd_start_graph_init_from_json(ten_cmd_start_graph_t *self,
+                                            ten_json_t *json,
+                                            ten_error_t *err) {
   TEN_ASSERT(self && ten_raw_cmd_check_integrity((ten_cmd_t *)self),
              "Should not happen.");
   TEN_ASSERT(json && ten_json_check_integrity(json), "Should not happen.");
 
-  return ten_raw_cmd_start_graph_init_from_json((ten_cmd_start_graph_t *)self,
-                                                json, err);
+  return ten_raw_cmd_start_graph_loop_all_fields(
+      (ten_msg_t *)self,
+      ten_raw_msg_get_one_field_from_json_include_internal_field, json, err);
 }
 
-static ten_cmd_start_graph_t *ten_raw_cmd_start_graph_create_from_json(
-    ten_json_t *json, ten_error_t *err) {
-  TEN_ASSERT(json, "Should not happen.");
-
-  ten_cmd_start_graph_t *cmd = ten_raw_cmd_start_graph_create();
-  TEN_ASSERT(cmd && ten_raw_cmd_check_integrity((ten_cmd_t *)cmd),
+bool ten_raw_cmd_start_graph_set_graph_from_json(ten_cmd_start_graph_t *self,
+                                                 ten_json_t *json,
+                                                 ten_error_t *err) {
+  TEN_ASSERT(self && ten_raw_cmd_check_integrity((ten_cmd_t *)self),
              "Should not happen.");
+  TEN_ASSERT(json && ten_json_check_integrity(json), "Should not happen.");
 
-  if (!ten_raw_cmd_start_graph_init_from_json(cmd, json, err)) {
-    ten_raw_cmd_start_graph_destroy(cmd);
-    return NULL;
+  return ten_raw_cmd_start_graph_loop_all_fields(
+      (ten_msg_t *)self, ten_raw_cmd_start_graph_as_msg_get_graph_from_json,
+      json, err);
+}
+
+static bool ten_raw_cmd_start_graph_set_graph_from_json_str(
+    ten_msg_t *self, const char *json_str, ten_error_t *err) {
+  TEN_ASSERT(self && ten_raw_cmd_check_integrity((ten_cmd_t *)self),
+             "Invalid argument.");
+  TEN_ASSERT(json_str, "Invalid argument.");
+
+  ten_json_t *json = ten_json_from_string(json_str, err);
+  if (!json) {
+    return false;
   }
 
-  return cmd;
+  bool rc = ten_raw_cmd_start_graph_set_graph_from_json(
+      (ten_cmd_start_graph_t *)self, json, err);
+
+  ten_json_destroy(json);
+
+  return rc;
 }
 
-ten_msg_t *ten_raw_cmd_start_graph_as_msg_create_from_json(ten_json_t *json,
-                                                           ten_error_t *err) {
-  TEN_ASSERT(json, "Should not happen.");
+bool ten_cmd_start_graph_set_graph_from_json_str(ten_shared_ptr_t *self,
+                                                 const char *json_str,
+                                                 ten_error_t *err) {
+  TEN_ASSERT(self && ten_cmd_check_integrity(self), "Invalid argument.");
+  TEN_ASSERT(json_str, "Invalid argument.");
 
-  return (ten_msg_t *)ten_raw_cmd_start_graph_create_from_json(json, err);
+  return ten_raw_cmd_start_graph_set_graph_from_json_str(
+      ten_msg_get_raw_msg(self), json_str, err);
 }
 
 ten_json_t *ten_raw_cmd_start_graph_to_json(ten_msg_t *self, ten_error_t *err) {
@@ -139,17 +183,10 @@ ten_json_t *ten_raw_cmd_start_graph_to_json(ten_msg_t *self, ten_error_t *err) {
   ten_json_t *json = ten_json_create_object();
   TEN_ASSERT(json, "Should not happen.");
 
-  for (size_t i = 0; i < ten_cmd_start_graph_fields_info_size; ++i) {
-    ten_msg_put_field_to_json_func_t put_field_to_json =
-        ten_cmd_start_graph_fields_info[i].put_field_to_json;
-    if (put_field_to_json) {
-      if (!put_field_to_json(
-              &(((ten_cmd_start_graph_t *)self)->cmd_hdr.cmd_base_hdr.msg_hdr),
-              json, err)) {
-        ten_json_destroy(json);
-        return NULL;
-      }
-    }
+  if (!ten_raw_cmd_start_graph_loop_all_fields(
+          self, ten_raw_msg_put_one_field_to_json, json, err)) {
+    ten_json_destroy(json);
+    return NULL;
   }
 
   return json;
@@ -202,7 +239,7 @@ ten_list_t *ten_cmd_start_graph_get_extension_groups_info(
   return ten_raw_cmd_start_graph_get_extension_groups_info(get_raw_cmd(self));
 }
 
-static void ten_cmd_start_graph_get_next_list_through_dests(
+static void ten_cmd_start_graph_collect_connectable_apps(
     ten_shared_ptr_t *self, ten_app_t *app,
     ten_extension_info_t *extension_info, ten_list_t *dests, ten_list_t *next,
     bool from_src_point_of_view) {
@@ -217,13 +254,24 @@ static void ten_cmd_start_graph_get_next_list_through_dests(
     ten_extension_info_t *dest_extension_info =
         ten_extension_info_from_smart_ptr(shared_dest_extension_info);
 
-    const bool equal = ten_string_is_equal(&dest_extension_info->loc.app_uri,
-                                           ten_app_get_uri(app));
+    const bool equal = ten_string_is_equal_c_str(
+        &dest_extension_info->loc.app_uri, ten_app_get_uri(app));
     const bool expected_equality = (from_src_point_of_view ? false : true);
 
     if (equal == expected_equality) {
       ten_extension_info_t *target_extension_info =
           from_src_point_of_view ? dest_extension_info : extension_info;
+
+      // If the URI of the target app represents a client URI, it means that the
+      // target app cannot allow other apps to actively connect to it (e.g., it
+      // does not have a listening port open). Instead, it can only initiate
+      // connections to other apps. Therefore, what this app should do is avoid
+      // connecting to the target app actively and instead wait for it to
+      // initiate the connection.
+      if (ten_string_starts_with(&target_extension_info->loc.app_uri,
+                                 TEN_STR_CLIENT)) {
+        continue;
+      }
 
       ten_listnode_t *found = ten_list_find_string(
           next, ten_string_get_raw_str(&target_extension_info->loc.app_uri));
@@ -236,7 +284,7 @@ static void ten_cmd_start_graph_get_next_list_through_dests(
   }
 }
 
-static void ten_cmd_start_graph_get_next_list_per_extension_info(
+static void ten_cmd_start_graph_collect_all_connectable_apps(
     ten_shared_ptr_t *self, ten_app_t *app,
     ten_extension_info_t *extension_info, ten_list_t *next,
     bool from_src_point_of_view) {
@@ -248,39 +296,39 @@ static void ten_cmd_start_graph_get_next_list_per_extension_info(
   ten_list_foreach (&extension_info->msg_dest_info.cmd, iter_cmd) {
     ten_msg_dest_info_t *cmd_dest =
         ten_shared_ptr_get_data(ten_smart_ptr_listnode_get(iter_cmd.node));
-    ten_cmd_start_graph_get_next_list_through_dests(self, app, extension_info,
-                                                    &cmd_dest->dest, next,
-                                                    from_src_point_of_view);
+    ten_cmd_start_graph_collect_connectable_apps(self, app, extension_info,
+                                                 &cmd_dest->dest, next,
+                                                 from_src_point_of_view);
   }
 
   ten_list_foreach (&extension_info->msg_dest_info.video_frame, iter_cmd) {
     ten_msg_dest_info_t *data_dest =
         ten_shared_ptr_get_data(ten_smart_ptr_listnode_get(iter_cmd.node));
-    ten_cmd_start_graph_get_next_list_through_dests(self, app, extension_info,
-                                                    &data_dest->dest, next,
-                                                    from_src_point_of_view);
+    ten_cmd_start_graph_collect_connectable_apps(self, app, extension_info,
+                                                 &data_dest->dest, next,
+                                                 from_src_point_of_view);
   }
 
   ten_list_foreach (&extension_info->msg_dest_info.audio_frame, iter_cmd) {
     ten_msg_dest_info_t *data_dest =
         ten_shared_ptr_get_data(ten_smart_ptr_listnode_get(iter_cmd.node));
-    ten_cmd_start_graph_get_next_list_through_dests(self, app, extension_info,
-                                                    &data_dest->dest, next,
-                                                    from_src_point_of_view);
+    ten_cmd_start_graph_collect_connectable_apps(self, app, extension_info,
+                                                 &data_dest->dest, next,
+                                                 from_src_point_of_view);
   }
 
   ten_list_foreach (&extension_info->msg_dest_info.data, iter_cmd) {
     ten_msg_dest_info_t *data_dest =
         ten_shared_ptr_get_data(ten_smart_ptr_listnode_get(iter_cmd.node));
-    ten_cmd_start_graph_get_next_list_through_dests(self, app, extension_info,
-                                                    &data_dest->dest, next,
-                                                    from_src_point_of_view);
+    ten_cmd_start_graph_collect_connectable_apps(self, app, extension_info,
+                                                 &data_dest->dest, next,
+                                                 from_src_point_of_view);
   }
 }
 
 // Get the list of the immediate remote apps of the local app.
-void ten_cmd_start_graph_get_next_list(ten_shared_ptr_t *self, ten_app_t *app,
-                                       ten_list_t *next) {
+void ten_cmd_start_graph_collect_all_immediate_connectable_apps(
+    ten_shared_ptr_t *self, ten_app_t *app, ten_list_t *next) {
   TEN_ASSERT(self && ten_cmd_base_check_integrity(self) &&
                  ten_msg_get_type(self) == TEN_MSG_TYPE_CMD_START_GRAPH &&
                  app && next,
@@ -290,12 +338,12 @@ void ten_cmd_start_graph_get_next_list(ten_shared_ptr_t *self, ten_app_t *app,
     ten_extension_info_t *extension_info =
         ten_shared_ptr_get_data(ten_smart_ptr_listnode_get(iter.node));
 
-    if (ten_string_is_equal(&extension_info->loc.app_uri,
-                            ten_app_get_uri(app))) {
-      ten_cmd_start_graph_get_next_list_per_extension_info(
+    if (ten_string_is_equal_c_str(&extension_info->loc.app_uri,
+                                  ten_app_get_uri(app))) {
+      ten_cmd_start_graph_collect_all_connectable_apps(
           self, app, extension_info, next, true);
     } else {
-      ten_cmd_start_graph_get_next_list_per_extension_info(
+      ten_cmd_start_graph_collect_all_connectable_apps(
           self, app, extension_info, next, false);
     }
   }
@@ -338,7 +386,7 @@ static void ten_raw_cmd_start_graph_add_missing_extension_group_node(
     }
 
     if (group_found) {
-      return;
+      continue;
     }
 
     ten_extension_group_info_t *extension_group_info =
@@ -347,8 +395,8 @@ static void ten_raw_cmd_start_graph_add_missing_extension_group_node(
     // Create an extension_group item that uses the builtin
     // default_extension_group, allowing the extension's extension_group to be
     // associated with an extension_group addon.
-    ten_string_init_formatted(&extension_group_info->extension_group_addon_name,
-                              TEN_STR_DEFAULT_EXTENSION_GROUP);
+    ten_string_set_formatted(&extension_group_info->extension_group_addon_name,
+                             TEN_STR_DEFAULT_EXTENSION_GROUP);
 
     ten_loc_set(
         &extension_group_info->loc,
@@ -378,7 +426,7 @@ bool ten_raw_cmd_start_graph_get_long_running_mode(
                      TEN_MSG_TYPE_CMD_START_GRAPH,
              "Should not happen.");
 
-  return self->long_running_mode;
+  return ten_value_get_bool(&self->long_running_mode, NULL);
 }
 
 bool ten_cmd_start_graph_get_long_running_mode(ten_shared_ptr_t *self) {
@@ -386,7 +434,29 @@ bool ten_cmd_start_graph_get_long_running_mode(ten_shared_ptr_t *self) {
                  ten_msg_get_type(self) == TEN_MSG_TYPE_CMD_START_GRAPH,
              "Should not happen.");
 
-  return get_raw_cmd(self)->long_running_mode;
+  return ten_raw_cmd_start_graph_get_long_running_mode(get_raw_cmd(self));
+}
+
+bool ten_cmd_start_graph_set_predefined_graph_name(
+    ten_shared_ptr_t *self, const char *predefined_graph_name,
+    ten_error_t *err) {
+  TEN_ASSERT(self && ten_cmd_base_check_integrity(self) &&
+                 ten_msg_get_type(self) == TEN_MSG_TYPE_CMD_START_GRAPH,
+             "Should not happen.");
+
+  return ten_value_set_string(&get_raw_cmd(self)->predefined_graph_name,
+                              predefined_graph_name);
+}
+
+bool ten_cmd_start_graph_set_long_running_mode(ten_shared_ptr_t *self,
+                                               bool long_running_mode,
+                                               ten_error_t *err) {
+  TEN_ASSERT(self && ten_cmd_base_check_integrity(self) &&
+                 ten_msg_get_type(self) == TEN_MSG_TYPE_CMD_START_GRAPH,
+             "Should not happen.");
+
+  return ten_value_set_bool(&get_raw_cmd(self)->long_running_mode,
+                            long_running_mode);
 }
 
 ten_string_t *ten_raw_cmd_start_graph_get_predefined_graph_name(
@@ -396,7 +466,7 @@ ten_string_t *ten_raw_cmd_start_graph_get_predefined_graph_name(
                      TEN_MSG_TYPE_CMD_START_GRAPH,
              "Should not happen.");
 
-  return &self->predefined_graph_name;
+  return ten_value_peek_string(&self->predefined_graph_name);
 }
 
 ten_string_t *ten_cmd_start_graph_get_predefined_graph_name(
@@ -410,25 +480,25 @@ ten_string_t *ten_cmd_start_graph_get_predefined_graph_name(
 
 void ten_cmd_start_graph_fill_loc_info(ten_shared_ptr_t *self,
                                        const char *app_uri,
-                                       const char *graph_name) {
+                                       const char *graph_id) {
   TEN_ASSERT(self && ten_cmd_base_check_integrity(self) &&
                  ten_msg_get_type(self) == TEN_MSG_TYPE_CMD_START_GRAPH &&
-                 graph_name && strlen(graph_name),
+                 graph_id && strlen(graph_id),
              "Should not happen.");
 
   ten_extensions_info_fill_loc_info(
-      ten_cmd_start_graph_get_extensions_info(self), app_uri, graph_name);
-  ten_extension_groups_info_fill_graph_name(
-      ten_cmd_start_graph_get_extension_groups_info(self), graph_name);
+      ten_cmd_start_graph_get_extensions_info(self), app_uri, graph_id);
+  ten_extension_groups_info_fill_graph_id(
+      ten_cmd_start_graph_get_extension_groups_info(self), graph_id);
 }
 
 ten_list_t
 ten_cmd_start_graph_get_extension_addon_and_instance_name_pairs_of_specified_extension_group(
-    ten_shared_ptr_t *self, const char *app_uri, const char *graph_name,
+    ten_shared_ptr_t *self, const char *app_uri, const char *graph_id,
     const char *extension_group_name) {
   TEN_ASSERT(self && ten_cmd_base_check_integrity(self) &&
                  ten_msg_get_type(self) == TEN_MSG_TYPE_CMD_START_GRAPH &&
-                 app_uri && graph_name && extension_group_name,
+                 app_uri && graph_id && extension_group_name,
              "Should not happen.");
 
   ten_list_t result = TEN_LIST_INIT_VAL;
@@ -450,8 +520,7 @@ ten_cmd_start_graph_get_extension_addon_and_instance_name_pairs_of_specified_ext
                "Invalid use of extension_info %p.", extension_info);
 
     if (ten_string_is_equal_c_str(&extension_info->loc.app_uri, app_uri) &&
-        ten_string_is_equal_c_str(&extension_info->loc.graph_name,
-                                  graph_name) &&
+        ten_string_is_equal_c_str(&extension_info->loc.graph_id, graph_id) &&
         ten_string_is_equal_c_str(&extension_info->loc.extension_group_name,
                                   extension_group_name)) {
       ten_extension_addon_and_instance_name_pair_t *extension_name_info =
@@ -496,4 +565,23 @@ ten_list_t ten_cmd_start_graph_get_requested_extension_names(
   }
 
   return requested_extension_names;
+}
+
+bool ten_raw_cmd_start_graph_loop_all_fields(
+    ten_msg_t *self, ten_raw_msg_process_one_field_func_t cb, void *user_data,
+    ten_error_t *err) {
+  TEN_ASSERT(self && ten_raw_cmd_check_integrity((ten_cmd_t *)self) && cb,
+             "Should not happen.");
+
+  for (size_t i = 0; i < ten_cmd_start_graph_fields_info_size; ++i) {
+    ten_msg_process_field_func_t process_field =
+        ten_cmd_start_graph_fields_info[i].process_field;
+    if (process_field) {
+      if (!process_field(self, cb, user_data, err)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
 }

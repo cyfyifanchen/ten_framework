@@ -15,7 +15,6 @@
 #include "include_internal/ten_runtime/extension/extension.h"
 #include "include_internal/ten_runtime/extension_group/extension_group.h"
 #include "ten_runtime/addon/extension/extension.h"
-#include "ten_runtime/addon/extension_group/extension_group.h"
 #include "ten_runtime/binding/common.h"
 #include "ten_runtime/ten_env/internal/on_xxx_done.h"
 #include "ten_runtime/ten_env/ten_env.h"
@@ -58,9 +57,11 @@ static void proxy_on_init(ten_addon_t *addon, ten_env_t *ten_env) {
   TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
              "Invalid argument.");
 
+  // About to call the Python function, so it's necessary to ensure that the GIL
+  // has been acquired.
   PyGILState_STATE prev_state = ten_py_gil_state_ensure();
 
-  ten_py_ten_env_t *py_ten_env = ten_py_ten_wrap(ten_env);
+  ten_py_ten_env_t *py_ten_env = ten_py_ten_env_wrap(ten_env);
   if (!py_ten_env) {
     TEN_ASSERT(0, "Failed to wrap ten.");
     goto done;
@@ -94,12 +95,20 @@ done:
 
 static void proxy_on_deinit(ten_addon_t *addon, ten_env_t *ten_env) {
   TEN_ASSERT(addon, "Invalid argument.");
-  TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
+  // TODO(Wei): In the context of Python standalone tests, the Python addon is
+  // registered into the TEN world within the extension tester thread (i.e., the
+  // Python thread) but is unregistered in the test app thread. It should be
+  // modified to also perform the Python addon registration within the test
+  // app's `on_configure_done`. This change will allow the underlying thread
+  // check to be set to `true`.
+  TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, false),
              "Invalid argument.");
 
+  // About to call the Python function, so it's necessary to ensure that the GIL
+  // has been acquired.
   PyGILState_STATE prev_state = ten_py_gil_state_ensure();
 
-  ten_py_ten_env_t *py_ten_env = ten_py_ten_wrap(ten_env);
+  ten_py_ten_env_t *py_ten_env = ten_py_ten_env_wrap(ten_env);
   if (!py_ten_env) {
     TEN_ASSERT(0, "Failed to wrap ten.");
     goto done;
@@ -143,6 +152,8 @@ static void proxy_on_create_instance_async(ten_addon_t *addon,
   TEN_ASSERT(py_addon && ten_py_addon_check_integrity(py_addon),
              "Should not happen.");
 
+  // About to call the Python function, so it's necessary to ensure that the GIL
+  // has been acquired.
   PyGILState_STATE prev_state = ten_py_gil_state_ensure();
 
   if (!py_addon || !name || !strlen(name)) {
@@ -153,7 +164,7 @@ static void proxy_on_create_instance_async(ten_addon_t *addon,
     goto done;
   }
 
-  ten_py_ten_env_t *py_ten_env = ten_py_ten_wrap(ten_env);
+  ten_py_ten_env_t *py_ten_env = ten_py_ten_env_wrap(ten_env);
   if (!py_ten_env) {
     TEN_ASSERT(0, "Failed to wrap ten.");
     goto done;
@@ -191,6 +202,8 @@ static void proxy_on_destroy_instance_async(ten_addon_t *addon,
   TEN_ASSERT(py_addon && ten_py_addon_check_integrity(py_addon),
              "Should not happen.");
 
+  // About to call the Python function, so it's necessary to ensure that the GIL
+  // has been acquired.
   PyGILState_STATE prev_state = ten_py_gil_state_ensure();
 
   switch (py_addon->type) {
@@ -229,11 +242,11 @@ static PyObject *ten_py_addon_create(PyTypeObject *type,
   py_addon->type = TEN_ADDON_TYPE_EXTENSION;  // Now we only support extension.
   py_addon->c_addon_host = NULL;
 
-  ten_addon_init(&py_addon->c_addon, proxy_on_init, proxy_on_deinit, NULL,
+  ten_addon_init(&py_addon->c_addon, proxy_on_init, proxy_on_deinit, NULL, NULL,
                  NULL);
 
-  py_addon->c_addon.on_create_instance_async = proxy_on_create_instance_async;
-  py_addon->c_addon.on_destroy_instance_async = proxy_on_destroy_instance_async;
+  py_addon->c_addon.on_create_instance = proxy_on_create_instance_async;
+  py_addon->c_addon.on_destroy_instance = proxy_on_destroy_instance_async;
 
   ten_binding_handle_set_me_in_target_lang(
       (ten_binding_handle_t *)&py_addon->c_addon, py_addon);

@@ -12,10 +12,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ten_utils/macro/check.h"
 #include "ten_utils/container/list.h"
 #include "ten_utils/lib/alloc.h"
 #include "ten_utils/lib/signature.h"
+#include "ten_utils/macro/check.h"
 #include "ten_utils/macro/memory.h"
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -34,24 +34,34 @@ ten_string_t *ten_string_create_from_c_str(const char *str, size_t size) {
   TEN_ASSERT(str, "Invalid argument.");
 
   ten_string_t *result = ten_string_create();
-  ten_string_copy_c_str(result, str, size);
+  ten_string_set_from_c_str(result, str, size);
 
   return result;
 }
+
+#define MAX_RETRIES 10
 
 void ten_string_append_from_va_list(ten_string_t *self, const char *fmt,
                                     va_list ap) {
   TEN_ASSERT(self && ten_string_check_integrity(self), "Invalid argument.");
 
+  size_t retry_count = 0;
+
   va_list cp;
+  va_copy(cp, ap);
+
   for (;;) {
-    va_copy(cp, ap);
+    va_list temp;
+    va_copy(temp, cp);
+
     int n = vsnprintf(&self->buf[self->first_unused_idx],
-                      self->buf_size - self->first_unused_idx, fmt, cp);
-    va_end(cp);
+                      self->buf_size - self->first_unused_idx, fmt, temp);
+
+    va_end(temp);
 
     if ((n > -1) && ((size_t)n < (self->buf_size - self->first_unused_idx))) {
       self->first_unused_idx += n;
+      va_end(cp);
       return;
     }
 
@@ -60,6 +70,13 @@ void ten_string_append_from_va_list(ten_string_t *self, const char *fmt,
       ten_string_reserve(self, n + 1);  // Exact
     } else {
       ten_string_reserve(self, self->buf_size * 2);  // 2x
+    }
+
+    if (++retry_count > MAX_RETRIES) {
+      va_end(cp);
+
+      TEN_ASSERT(0, "Should not happen");
+      return;
     }
   }
 }
@@ -93,6 +110,8 @@ void ten_string_destroy(ten_string_t *self) {
 
 void ten_string_init(ten_string_t *self) {
   TEN_ASSERT(self, "Invalid argument.");
+  // TEN_ASSERT(ten_signature_get(&self->signature) != TEN_STRING_SIGNATURE,
+  //            "Should not happen.");
 
   ten_signature_set(&self->signature, (ten_signature_t)TEN_STRING_SIGNATURE);
 
@@ -110,6 +129,24 @@ void ten_string_init_from_va_list(ten_string_t *self, const char *fmt,
   ten_string_append_from_va_list(self, fmt, ap);
 }
 
+void ten_string_init_from_string(ten_string_t *self, ten_string_t *other) {
+  TEN_ASSERT(self, "Invalid argument.");
+  TEN_ASSERT(other && ten_string_check_integrity(other) &&
+                 ten_string_get_raw_str(other),
+             "Invalid argument.");
+
+  ten_string_init_formatted(self, "%s", ten_string_get_raw_str(other));
+}
+
+void ten_string_copy(ten_string_t *self, ten_string_t *other) {
+  TEN_ASSERT(self, "Invalid argument.");
+  TEN_ASSERT(other && ten_string_check_integrity(other) &&
+                 ten_string_get_raw_str(other),
+             "Invalid argument.");
+
+  ten_string_set_formatted(self, "%s", ten_string_get_raw_str(other));
+}
+
 void ten_string_init_formatted(ten_string_t *self, const char *fmt, ...) {
   TEN_ASSERT(self, "Invalid argument.");
 
@@ -119,24 +156,22 @@ void ten_string_init_formatted(ten_string_t *self, const char *fmt, ...) {
   va_end(ap);
 }
 
-void ten_string_copy(ten_string_t *self, ten_string_t *other) {
-  TEN_ASSERT(self && other && ten_string_check_integrity(other) &&
-                 ten_string_get_raw_str(other),
-             "Invalid argument.");
-
-  ten_string_init_formatted(self, "%s", ten_string_get_raw_str(other));
-}
-
-void ten_string_copy_c_str(ten_string_t *self, const char *other, size_t size) {
-  TEN_ASSERT(self && other, "Invalid argument.");
+void ten_string_init_from_c_str(ten_string_t *self, const char *str,
+                                size_t size) {
+  TEN_ASSERT(self && str, "Invalid argument.");
+  TEN_ASSERT(size, "Invalid argument.");
 
   ten_string_init(self);
+  ten_string_set_formatted(self, "%.*s", size, str);
+}
 
-  if (size == 0) {
-    size = strlen(other);
-  }
+void ten_string_set_from_c_str(ten_string_t *self, const char *str,
+                               size_t size) {
+  TEN_ASSERT(self && ten_string_check_integrity(self) && str,
+             "Invalid argument.");
+  TEN_ASSERT(size, "Invalid argument.");
 
-  ten_string_set_formatted(self, "%.*s", size, other);
+  ten_string_set_formatted(self, "%.*s", size, str);
 }
 
 void ten_string_set_formatted(ten_string_t *self, const char *fmt, ...) {
@@ -199,10 +234,8 @@ void ten_string_append_formatted(ten_string_t *self, const char *fmt, ...) {
   va_end(ap);
 }
 
-void ten_string_deinit(ten_string_t *self) {
+static void ten_string_reset(ten_string_t *self) {
   TEN_ASSERT(self && ten_string_check_integrity(self), "Invalid argument.");
-
-  ten_signature_set(&self->signature, 0);
 
   if (self->buf && self->buf != self->pre_buf) {
     TEN_FREE(self->buf);
@@ -210,6 +243,13 @@ void ten_string_deinit(ten_string_t *self) {
   }
   self->buf_size = TEN_STRING_PRE_BUF_SIZE;
   self->first_unused_idx = 0;
+}
+
+void ten_string_deinit(ten_string_t *self) {
+  TEN_ASSERT(self && ten_string_check_integrity(self), "Invalid argument.");
+
+  ten_string_reset(self);
+  ten_signature_set(&self->signature, 0);
 }
 
 void ten_string_clear(ten_string_t *self) {
@@ -220,18 +260,37 @@ void ten_string_clear(ten_string_t *self) {
 
 void ten_string_reserve(ten_string_t *self, size_t extra) {
   TEN_ASSERT(self && ten_string_check_integrity(self), "Invalid argument.");
-  if ((self->buf_size - self->first_unused_idx) < extra) {
+
+  if (extra > SIZE_MAX - self->first_unused_idx) {
+    TEN_ASSERT(0, "Size overflow detected.");
+    return;
+  }
+
+  size_t required_size = self->first_unused_idx + extra;
+  if (required_size > (size_t)MAX_BUFFER_SIZE) {
+    TEN_ASSERT(0, "Buffer size exceeds the maximum limit.");
+    return;
+  }
+
+  if (self->buf_size < required_size) {
+    size_t new_size = self->buf_size * BUFFER_ENLARGE_RATIO;
+    if (new_size < required_size) {
+      new_size = required_size;
+    }
+
     char *tmp = NULL;
     if (self->buf == self->pre_buf) {
-      tmp = (char *)TEN_MALLOC(self->buf_size + extra);
+      tmp = (char *)TEN_MALLOC(new_size);
       TEN_ASSERT(tmp, "Failed to allocate memory.");
+
       memcpy(tmp, self->buf, self->first_unused_idx);
     } else {
-      tmp = (char *)TEN_REALLOC(self->buf, self->buf_size + extra);
+      tmp = (char *)TEN_REALLOC(self->buf, new_size);
       TEN_ASSERT(tmp, "Failed to allocate memory.");
     }
+
     self->buf = tmp;
-    self->buf_size += extra;
+    self->buf_size = new_size;
   }
 }
 

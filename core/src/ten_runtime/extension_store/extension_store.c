@@ -10,10 +10,10 @@
 #include <stdlib.h>
 
 #include "include_internal/ten_runtime/extension/extension.h"
-#include "include_internal/ten_utils/log/log.h"
 #include "ten_utils/container/hash_table.h"
 #include "ten_utils/lib/alloc.h"
 #include "ten_utils/lib/string.h"
+#include "ten_utils/log/log.h"
 #include "ten_utils/macro/check.h"
 #include "ten_utils/macro/field.h"
 #include "ten_utils/sanitizer/thread_check.h"
@@ -97,7 +97,7 @@ bool ten_extension_store_add_extension(ten_extension_store_t *self,
       &self->hash_table, ten_string_get_raw_str(&extension->name));
   if (found) {
     TEN_LOGE("Failed to have extension with name: %s",
-             ten_extension_get_name(extension));
+             ten_extension_get_name(extension, true));
     result = false;
     goto done;
   }

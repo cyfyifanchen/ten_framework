@@ -14,7 +14,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "ten_utils/macro/check.h"
 #include "include_internal/ten_utils/value/value.h"
 #include "ten_utils/container/list.h"
 #include "ten_utils/container/list_node.h"
@@ -22,9 +21,11 @@
 #include "ten_utils/lib/buf.h"
 #include "ten_utils/lib/error.h"
 #include "ten_utils/lib/string.h"
+#include "ten_utils/macro/check.h"
 #include "ten_utils/macro/mark.h"
 #include "ten_utils/macro/memory.h"
 #include "ten_utils/value/type.h"
+#include "ten_utils/value/value_is.h"
 #include "ten_utils/value/value_kv.h"
 
 bool ten_value_check_integrity(ten_value_t *self) {
@@ -50,6 +51,8 @@ static bool ten_value_copy_int8(ten_value_t *dest, ten_value_t *src,
 static void ten_value_init(ten_value_t *self) {
   TEN_ASSERT(self, "Invalid argument.");
 
+  // Initialize all memory within `value` to 0, so that the type within it (such
+  // as `ten_string_t`) recognizes it as being in an uninitialized state.
   memset(self, 0, sizeof(ten_value_t));
 
   ten_signature_set(&self->signature, (ten_signature_t)TEN_VALUE_SIGNATURE);
@@ -331,12 +334,12 @@ bool ten_value_init_bool(ten_value_t *self, bool value) {
   return true;
 }
 
-static bool ten_value_copy_string(ten_value_t *dest, ten_value_t *src,
-                                  TEN_UNUSED ten_error_t *err) {
+static bool ten_value_copy_construct_string(ten_value_t *dest, ten_value_t *src,
+                                            TEN_UNUSED ten_error_t *err) {
   TEN_ASSERT(dest && src, "Invalid argument.");
-  TEN_ASSERT(src->type == TEN_TYPE_STRING, "Invalid argument.");
+  TEN_ASSERT(ten_value_is_string(src), "Invalid argument.");
 
-  ten_string_copy(&dest->content.string, &src->content.string);
+  ten_string_init_from_string(&dest->content.string, &src->content.string);
 
   return true;
 }
@@ -344,23 +347,23 @@ static bool ten_value_copy_string(ten_value_t *dest, ten_value_t *src,
 static bool ten_value_destruct_string(ten_value_t *self,
                                       TEN_UNUSED ten_error_t *err) {
   TEN_ASSERT(self, "Invalid argument.");
-  TEN_ASSERT(self->type == TEN_TYPE_STRING, "Invalid argument.");
+  TEN_ASSERT(ten_value_is_string(self), "Invalid argument.");
 
   ten_string_deinit(&self->content.string);
 
   return true;
 }
 
-static bool ten_value_init_string(ten_value_t *self) {
+bool ten_value_init_string(ten_value_t *self) {
   TEN_ASSERT(self, "Invalid argument.");
 
   ten_value_init(self);
 
   self->type = TEN_TYPE_STRING;
-  ten_string_init(&self->content.string);
 
+  ten_string_init(&self->content.string);
   self->construct = NULL;
-  self->copy = ten_value_copy_string;
+  self->copy = ten_value_copy_construct_string;
   self->destruct = ten_value_destruct_string;
 
   return true;
@@ -383,7 +386,7 @@ bool ten_value_init_string_with_size(ten_value_t *self, const char *str,
   TEN_ASSERT(str, "Invalid argument.");
 
   ten_value_init_string(self);
-  ten_string_init_formatted(&self->content.string, "%.*s", len, str);
+  ten_string_set_formatted(&self->content.string, "%.*s", len, str);
 
   return true;
 }
@@ -861,14 +864,52 @@ bool ten_value_is_equal(ten_value_t *self, ten_value_t *target) {
           ten_list_size(&target->content.object)) {
         return false;
       }
-      // TODO(Wei): Implement the equality check for object-type value.
+
+      ten_list_foreach (&self->content.object, iter_self) {
+        ten_value_kv_t *kv_self = ten_ptr_listnode_get(iter_self.node);
+        TEN_ASSERT(kv_self && ten_value_kv_check_integrity(kv_self),
+                   "Invalid argument.");
+
+        // Peek the corresponding value in the target object.
+        ten_value_t *kv_target = ten_value_object_peek(
+            target, ten_string_get_raw_str(&kv_self->key));
+        if (!kv_target) {
+          // Key does not exist in target
+          return false;
+        }
+
+        // Recursively check equality of the values.
+        if (!ten_value_is_equal(kv_self->value, kv_target)) {
+          return false;
+        }
+      }
       break;
     case TEN_TYPE_ARRAY:
       if (ten_list_size(&self->content.array) !=
           ten_list_size(&target->content.array)) {
         return false;
       }
-      // TODO(Wei): Implement the equality check for array-type value.
+
+      {
+        ten_list_iterator_t iter_self = ten_list_begin(&self->content.array);
+        ten_list_iterator_t iter_target =
+            ten_list_begin(&target->content.array);
+
+        while (!ten_list_iterator_is_end(iter_self) &&
+               !ten_list_iterator_is_end(iter_target)) {
+          ten_value_t *value_self =
+              (ten_value_t *)ten_list_iterator_to_listnode(iter_self);
+          ten_value_t *value_target =
+              (ten_value_t *)ten_list_iterator_to_listnode(iter_target);
+
+          if (!ten_value_is_equal(value_self, value_target)) {
+            return false;
+          }
+
+          iter_self = ten_list_iterator_next(iter_self);
+          iter_target = ten_list_iterator_next(iter_target);
+        }
+      }
       break;
     case TEN_TYPE_INT8:
       return self->content.int8 == target->content.int8;

@@ -14,18 +14,15 @@
 #include "include_internal/ten_runtime/extension_group/extension_group.h"
 #include "include_internal/ten_runtime/global/global.h"
 #include "include_internal/ten_runtime/global/signal.h"
-#include "include_internal/ten_runtime/protocol/context_store.h"
 #include "include_internal/ten_runtime/protocol/protocol.h"
 #include "include_internal/ten_runtime/schema_store/store.h"
 #include "include_internal/ten_runtime/ten_env/ten_env.h"
-#include "include_internal/ten_utils/log/log.h"
 #include "ten_runtime/binding/common.h"
-#include "ten_runtime/protocol/context_store.h"
 #include "ten_runtime/ten_env/ten_env.h"
 #include "ten_utils/container/list.h"
+#include "ten_utils/container/list_str.h"
 #include "ten_utils/lib/alloc.h"
 #include "ten_utils/lib/event.h"
-#include "ten_utils/lib/file.h"
 #include "ten_utils/lib/mutex.h"
 #include "ten_utils/lib/ref.h"
 #include "ten_utils/lib/string.h"
@@ -68,8 +65,7 @@ static void *ten_app_routine(void *args) {
 
   TEN_ASSERT(ten_app_check_integrity(self, true), "Should not happen.");
 
-  TEN_LOGI("[%s] App is created.",
-           ten_string_get_raw_str(ten_app_get_uri(self)));
+  TEN_LOGI("[%s] App is created.", ten_app_get_uri(self));
 
   self->loop = ten_runloop_create(NULL);
   TEN_ASSERT(self->loop, "Should not happen.");
@@ -132,6 +128,7 @@ ten_app_t *ten_app_create(ten_app_on_configure_func_t on_configure,
   TEN_ASSERT(self->ten_env, "Should not happen.");
 
   ten_string_init(&self->base_dir);
+  ten_list_init(&self->ten_package_base_dirs);
 
   self->manifest_info = NULL;
   self->property_info = NULL;
@@ -145,7 +142,7 @@ void ten_app_destroy(ten_app_t *self) {
   TEN_ASSERT(self && ten_app_check_integrity(self, false),
              "Should not happen.");
 
-  TEN_LOGD("[%s] Destroy a App", ten_string_get_raw_str(ten_app_get_uri(self)));
+  TEN_LOGD("[%s] Destroy a App", ten_app_get_uri(self));
 
   ten_global_del_app(self);
 
@@ -157,9 +154,6 @@ void ten_app_destroy(ten_app_t *self) {
   if (self->endpoint_protocol) {
     ten_ref_dec_ref(&self->endpoint_protocol->ref);
   }
-
-  ten_protocol_context_store_destroy(self->protocol_context_store);
-  self->protocol_context_store = NULL;
 
   ten_value_deinit(&self->manifest);
   ten_value_deinit(&self->property);
@@ -192,8 +186,15 @@ void ten_app_destroy(ten_app_t *self) {
   ten_event_destroy(self->belonging_thread_is_set);
 
   ten_string_deinit(&self->base_dir);
+  ten_list_clear(&self->ten_package_base_dirs);
 
   TEN_FREE(self);
+}
+
+void ten_app_add_ten_package_base_dir(ten_app_t *self, const char *base_dir) {
+  TEN_ASSERT(self && ten_app_check_integrity(self, false), "Invalid argument.");
+
+  ten_list_push_str_back(&self->ten_package_base_dirs, base_dir);
 }
 
 bool ten_app_run(ten_app_t *self, bool run_in_background,
@@ -209,7 +210,8 @@ bool ten_app_run(ten_app_t *self, bool run_in_background,
   }
 
   if (run_in_background) {
-    ten_thread_create("app thread", ten_app_routine, self);
+    ten_thread_create(ten_string_get_raw_str(&self->uri), ten_app_routine,
+                      self);
     ten_event_wait(self->belonging_thread_is_set, -1);
   } else {
     ten_app_routine(self);
@@ -234,16 +236,6 @@ bool ten_app_wait(ten_app_t *self, TEN_UNUSED ten_error_t *err) {
   }
 
   return true;
-}
-
-ten_string_t *ten_app_get_base_dir(ten_app_t *self) {
-  // TEN_NOLINTNEXTLINE(thread-check)
-  // thread-check: This function might be called from other threads, ex: the
-  // extension thread. And the `base_dir` is only set when starting the app, so
-  // it's thread safe to read after app starts.
-  TEN_ASSERT(self && ten_app_check_integrity(self, false), "Invalid argument.");
-
-  return &self->base_dir;
 }
 
 bool ten_app_thread_call_by_me(ten_app_t *self) {

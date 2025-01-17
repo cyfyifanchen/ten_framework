@@ -25,8 +25,10 @@
 #include "ten_utils/container/list_ptr.h"
 #include "ten_utils/lib/error.h"
 #include "ten_utils/lib/string.h"
+#include "ten_utils/log/log.h"
 #include "ten_utils/macro/check.h"
 #include "ten_utils/macro/field.h"
+#include "ten_utils/macro/mark.h"
 #include "ten_utils/value/value.h"
 #include "ten_utils/value/value_is.h"
 #include "ten_utils/value/value_kv.h"
@@ -234,6 +236,7 @@ bool ten_schema_store_set_schema_definition(ten_schema_store_t *self,
   return true;
 }
 
+#if defined(TEN_ENABLE_TEN_RUST_APIS)
 static void ten_schemas_parse_interface_part(
     ten_hashtable_t *interface_schema_map, ten_value_t *interface_schema_value,
     const char *base_dir) {
@@ -241,7 +244,6 @@ static void ten_schemas_parse_interface_part(
   TEN_ASSERT(interface_schema_value &&
                  ten_value_check_integrity(interface_schema_value),
              "Invalid argument.");
-  TEN_ASSERT(base_dir, "Invalid argument.");
 
   if (!ten_value_is_array(interface_schema_value)) {
     TEN_ASSERT(0, "The schema should be an array.");
@@ -330,18 +332,23 @@ static bool ten_schema_store_merge_interface_schemas_into_msg_schemas(
 
   return true;
 }
+#endif
 
-bool ten_schema_store_set_interface_schema_definition(ten_schema_store_t *self,
-                                                      ten_value_t *schema_def,
-                                                      const char *base_dir,
-                                                      ten_error_t *err) {
+/**
+ * @param base_dir The base directory of the addon. If the interface definition
+ * is a file reference, it is used to resolve the file reference based on the
+ * base_dir.
+ */
+bool ten_schema_store_set_interface_schema_definition(
+    ten_schema_store_t *self, ten_value_t *schema_def,
+    TEN_UNUSED const char *base_dir, ten_error_t *err) {
   TEN_ASSERT(self && ten_schema_store_check_integrity(self),
              "Invalid argument.");
   TEN_ASSERT(schema_def && ten_value_check_integrity(schema_def),
              "Invalid argument.");
   TEN_ASSERT(err && ten_error_check_integrity(err), "Invalid argument.");
-  TEN_ASSERT(base_dir, "Invalid argument.");
 
+#if defined(TEN_ENABLE_TEN_RUST_APIS)
   if (!ten_value_is_object(schema_def)) {
     ten_error_set(err, TEN_ERRNO_GENERIC,
                   "The interface schema should be an object.");
@@ -371,6 +378,7 @@ bool ten_schema_store_set_interface_schema_definition(ten_schema_store_t *self,
       return false;
     }
   }
+#endif
 
   return true;
 }
@@ -384,16 +392,16 @@ void ten_schema_store_deinit(ten_schema_store_t *self) {
     self->property = NULL;
   }
 
-  ten_hashtable_clear(&self->cmd_in);
-  ten_hashtable_clear(&self->cmd_out);
-  ten_hashtable_clear(&self->data_in);
-  ten_hashtable_clear(&self->data_out);
-  ten_hashtable_clear(&self->video_frame_in);
-  ten_hashtable_clear(&self->video_frame_out);
-  ten_hashtable_clear(&self->audio_frame_in);
-  ten_hashtable_clear(&self->audio_frame_out);
-  ten_hashtable_clear(&self->interface_in);
-  ten_hashtable_clear(&self->interface_out);
+  ten_hashtable_deinit(&self->cmd_in);
+  ten_hashtable_deinit(&self->cmd_out);
+  ten_hashtable_deinit(&self->data_in);
+  ten_hashtable_deinit(&self->data_out);
+  ten_hashtable_deinit(&self->video_frame_in);
+  ten_hashtable_deinit(&self->video_frame_out);
+  ten_hashtable_deinit(&self->audio_frame_in);
+  ten_hashtable_deinit(&self->audio_frame_out);
+  ten_hashtable_deinit(&self->interface_in);
+  ten_hashtable_deinit(&self->interface_out);
 }
 
 // {

@@ -14,92 +14,71 @@ int main(TEN_UNUSED int argc, TEN_UNUSED char **argv) {
   // Create a client and connect to the app.
   auto *client = new ten::msgpack_tcp_client_t("msgpack://127.0.0.1:8007/");
 
-  nlohmann::json resp = client->send_json_and_recv_resp_in_json(R"({
-    "_ten": {
-      "type": "start_graph",
-      "seq_id": "156",
-      "nodes": [
-        {
-          "type": "extension_group",
-          "app": "msgpack://127.0.0.1:8007/",
-          "addon": "default_extension_group",
-          "name": "nodetest_group"
-        },
+  auto start_graph_cmd = ten::cmd_start_graph_t::create();
+  start_graph_cmd->set_graph_from_json(R"({
+           "nodes": [
         {
           "type": "extension",
           "app": "msgpack://127.0.0.1:8007/",
           "extension_group": "nodetest_group",
-          "addon": "nodetest",
+          "addon": "extension_a",
           "name": "A"
         },
         {
           "type": "extension",
           "app": "msgpack://127.0.0.1:8007/",
           "extension_group": "nodetest_group",
-          "addon": "nodetest",
+          "addon": "extension_b",
           "name": "B"
         },
         {
           "type": "extension",
           "app": "msgpack://127.0.0.1:8007/",
           "extension_group": "nodetest_group",
-          "addon": "nodetest",
+          "addon": "extension_c",
           "name": "C"
         }
       ],
       "connections": [
         {
           "app": "msgpack://127.0.0.1:8007/",
-          "extension_group": "nodetest_group",
           "extension": "A",
           "cmd": [{
             "name": "B",
             "dest": [{
               "app": "msgpack://127.0.0.1:8007/",
-              "extension_group": "nodetest_group",
               "extension": "B"
             }]
           }]
         },
         {
           "app": "msgpack://127.0.0.1:8007/",
-          "extension_group": "nodetest_group",
           "extension": "B",
           "cmd": [{
             "name": "C",
             "dest": [{
               "app": "msgpack://127.0.0.1:8007/",
-              "extension_group": "nodetest_group",
               "extension": "C"
             }]
           }]
         }
       ]
-    }
-  })"_json);
+    })");
+  auto cmd_result =
+      client->send_cmd_and_recv_result(std::move(start_graph_cmd));
   TEN_LOGD("client sent json");
 
-  TEN_ASSERT(TEN_STATUS_CODE_OK == resp["_ten"]["status_code"],
+  TEN_ASSERT(TEN_STATUS_CODE_OK == cmd_result->get_status_code(),
              "Should not happen.");
 
   TEN_LOGD("got graph result");
-
-  resp = client->send_json_and_recv_resp_in_json(
-      R"({
-    "_ten": {
-      "name": "A",
-      "seq_id": "238",
-      "dest": [{
-        "app": "msgpack://127.0.0.1:8007/",
-        "extension_group": "nodetest_group",
-        "extension": "A"
-      }]
-    }
-  })"_json);
-  TEN_ASSERT(TEN_STATUS_CODE_OK == resp["_ten"]["status_code"],
+  auto A_cmd = ten::cmd_t::create("A");
+  A_cmd->set_dest("msgpack://127.0.0.1:8007/", nullptr, "nodetest_group", "A");
+  cmd_result = client->send_cmd_and_recv_result(std::move(A_cmd));
+  TEN_ASSERT(TEN_STATUS_CODE_OK == cmd_result->get_status_code(),
              "Should not happen.");
 
-  std::string resp_str = resp["detail"];
+  std::string resp_str = cmd_result->get_property_string("detail");
   TEN_LOGD("got result: %s", resp_str.c_str());
   ten_json_t *result = ten_json_from_string(resp_str.c_str(), NULL);
   TEN_ASSERT(

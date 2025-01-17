@@ -20,11 +20,11 @@
 #include "include_internal/ten_runtime/extension/extension_info/extension_info.h"
 #include "include_internal/ten_runtime/extension_group/extension_group.h"
 #include "include_internal/ten_runtime/extension_group/extension_group_info/extension_group_info.h"
+#include "include_internal/ten_runtime/extension_group/on_xxx.h"
 #include "include_internal/ten_runtime/extension_thread/extension_thread.h"
 #include "include_internal/ten_runtime/msg/cmd_base/cmd/start_graph/cmd.h"
 #include "include_internal/ten_runtime/msg/msg.h"
 #include "include_internal/ten_runtime/ten_env/ten_env.h"
-#include "include_internal/ten_utils/log/log.h"
 #include "ten_runtime/app/app.h"
 #include "ten_runtime/common/errno.h"
 #include "ten_runtime/ten_env/ten_env.h"
@@ -58,7 +58,7 @@ ten_extension_context_t *ten_extension_context_create(ten_engine_t *engine) {
   TEN_ASSERT(engine && ten_engine_check_integrity(engine, true),
              "Should not happen.");
 
-  TEN_LOGD("[%s] Create Extension context.", ten_engine_get_name(engine));
+  TEN_LOGD("[%s] Create Extension context.", ten_engine_get_id(engine, true));
 
   ten_extension_context_t *self =
       (ten_extension_context_t *)TEN_MALLOC(sizeof(ten_extension_context_t));
@@ -73,8 +73,6 @@ ten_extension_context_t *ten_extension_context_create(ten_engine_t *engine) {
   self->on_closed_data = NULL;
 
   self->engine = engine;
-
-  self->ten_env = ten_env_create_for_engine(engine);
 
   ten_list_init(&self->extension_groups_info_from_graph);
   ten_list_init(&self->extensions_info_from_graph);
@@ -104,8 +102,6 @@ static void ten_extension_context_destroy(ten_extension_context_t *self) {
   ten_list_clear(&self->extension_groups_info_from_graph);
   ten_list_clear(&self->extensions_info_from_graph);
 
-  ten_env_destroy(self->ten_env);
-
   if (self->state_requester_cmd) {
     ten_shared_ptr_destroy(self->state_requester_cmd);
   }
@@ -133,7 +129,10 @@ ten_extension_context_do_close_after_all_extension_groups_are_closed(
   TEN_ASSERT(ten_extension_context_check_integrity(self, true),
              "Invalid use of extension_context %p.", self);
 
-  ten_env_close(self->ten_env);
+  ten_engine_t *engine = self->engine;
+  TEN_ASSERT(engine && ten_engine_check_integrity(engine, true),
+             "Should not happen.");
+  ten_env_close(engine->ten_env);
 
   if (self->on_closed) {
     self->on_closed(self, self->on_closed_data);
@@ -152,12 +151,12 @@ void ten_extension_context_close(ten_extension_context_t *self) {
 
   if (!ten_atomic_bool_compare_swap(&self->is_closing, 0, 1)) {
     TEN_LOGW("[%s] Extension context has already been signaled to close.",
-             ten_engine_get_name(self->engine));
+             ten_engine_get_id(self->engine, true));
     return;
   }
 
   TEN_LOGD("[%s] Try to close extension context.",
-           ten_engine_get_name(self->engine));
+           ten_engine_get_id(self->engine, true));
 
   if (ten_list_size(&self->extension_threads)) {
     ten_list_foreach (&self->extension_threads, iter) {
@@ -238,10 +237,11 @@ void ten_extension_context_on_close(ten_extension_context_t *self) {
 
   if (!ten_extension_context_could_be_close(self)) {
     TEN_LOGD("[%s] Could not close alive extension context.",
-             ten_engine_get_name(self->engine));
+             ten_engine_get_id(self->engine, true));
     return;
   }
-  TEN_LOGD("[%s] Close extension context.", ten_engine_get_name(self->engine));
+  TEN_LOGD("[%s] Close extension context.",
+           ten_engine_get_id(self->engine, true));
 
   ten_extension_context_do_close(self);
 }
@@ -258,7 +258,7 @@ void ten_extension_context_set_on_closed(
 }
 
 ten_extension_info_t *ten_extension_context_get_extension_info_by_name(
-    ten_extension_context_t *self, const char *app_uri, const char *graph_name,
+    ten_extension_context_t *self, const char *app_uri, const char *graph_id,
     const char *extension_group_name, const char *extension_name) {
   TEN_ASSERT(self, "Invalid argument.");
 
@@ -289,8 +289,8 @@ ten_extension_info_t *ten_extension_context_get_extension_info_by_name(
       continue;
     }
 
-    if (graph_name && !ten_string_is_equal_c_str(
-                          &extension_info->loc.graph_name, graph_name)) {
+    if (graph_id &&
+        !ten_string_is_equal_c_str(&extension_info->loc.graph_id, graph_id)) {
       continue;
     }
 
@@ -393,11 +393,15 @@ static void destroy_extension_group_by_addon(
   TEN_ASSERT(ten_extension_context_check_integrity(extension_context, true),
              "Invalid use of extension_context %p.", extension_context);
 
-  ten_env_t *ten_env = extension_context->ten_env;
+  ten_engine_t *engine = extension_context->engine;
+  TEN_ASSERT(engine && ten_engine_check_integrity(engine, true),
+             "Should not happen.");
+
+  ten_env_t *ten_env = engine->ten_env;
   TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
              "Should not happen.");
 
-  ten_addon_extension_group_destroy(
+  ten_addon_destroy_extension_group(
       ten_env, extension_group,
       ten_extension_context_on_extension_group_destroyed, NULL);
 }
@@ -456,7 +460,7 @@ static void ten_extension_context_create_extension_group_done(
     ten_list_t result =
         ten_cmd_start_graph_get_extension_addon_and_instance_name_pairs_of_specified_extension_group(
             requester_cmd, ten_string_get_raw_str(&dest_loc->app_uri),
-            ten_string_get_raw_str(&dest_loc->graph_name),
+            ten_string_get_raw_str(&dest_loc->graph_id),
             ten_string_get_raw_str(&extension_group->name));
 
     ten_list_swap(&extension_group->extension_addon_and_instance_name_pairs,
@@ -502,10 +506,8 @@ static void ten_extension_context_create_extension_group_done(
 
     extension_group->extension_group_info =
         ten_extension_context_get_extension_group_info_by_name(
-            extension_context,
-            ten_string_get_raw_str(
-                ten_app_get_uri(extension_context->engine->app)),
-            ten_string_get_raw_str(&extension_group->name));
+            extension_context, ten_app_get_uri(extension_context->engine->app),
+            ten_extension_group_get_name(extension_group, true));
     TEN_ASSERT(extension_group->extension_group_info, "Should not happen.");
 
     ten_extension_context_start(extension_context);
@@ -541,7 +543,11 @@ bool ten_extension_context_start_extension_group(
     goto done;
   }
 
-  ten_env_t *ten_env = self->ten_env;
+  ten_engine_t *engine = self->engine;
+  TEN_ASSERT(engine && ten_engine_check_integrity(engine, true),
+             "Should not happen.");
+
+  ten_env_t *ten_env = engine->ten_env;
   TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
              "Should not happen.");
   TEN_ASSERT(ten_env->attach_to == TEN_ENV_ATTACH_TO_ENGINE,
@@ -560,13 +566,13 @@ bool ten_extension_context_start_extension_group(
     // `app`.
     if (ten_string_is_equal(&extension_group_info->loc.app_uri,
                             &self->engine->app->uri)) {
-      bool res = ten_addon_extension_group_create(
+      bool res = ten_addon_create_extension_group(
           ten_env,
           ten_string_get_raw_str(
               &extension_group_info->extension_group_addon_name),
           ten_string_get_raw_str(
               &extension_group_info->loc.extension_group_name),
-          (ten_env_addon_on_create_instance_async_cb_t)
+          (ten_env_addon_create_instance_done_cb_t)
               ten_extension_context_create_extension_group_done,
           NULL);
 
@@ -574,7 +580,7 @@ bool ten_extension_context_start_extension_group(
         TEN_LOGE(
             "[%s] Failed to start the extension group, because unable to find "
             "the specified extension group addon: %s",
-            ten_engine_get_name(self->engine),
+            ten_engine_get_id(self->engine, true),
             ten_string_get_raw_str(
                 &extension_group_info->extension_group_addon_name));
 

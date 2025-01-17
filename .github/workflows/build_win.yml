@@ -1,9 +1,8 @@
 name: Build - win
 
 on:
-  push:
-    branches:
-      - "**"
+  pull_request:
+    types: [opened, synchronize, reopened]
     paths-ignore:
       - "tools/**"
       - "docs/**"
@@ -12,11 +11,15 @@ on:
       - ".github/**"
       - "!.github/workflows/build_win.yml"
       - "**.md"
-  pull_request:
 
 jobs:
-  build:
+  build-win-x64:
+    concurrency:
+      group: build-win-x64-${{ github.head_ref }}-${{ matrix.build_type }}
+      cancel-in-progress: true
     runs-on: windows-latest
+    env:
+      PYTHONIOENCODING: utf-8
     strategy:
       matrix:
         build_type: [debug, release]
@@ -25,6 +28,10 @@ jobs:
         with:
           fetch-depth: "0"
           submodules: "true"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
       - uses: ilammy/msvc-dev-cmd@v1
 
@@ -45,8 +52,84 @@ jobs:
           rustup default nightly
           cargo install --force cbindgen
 
+      - name: Get Python executable path
+        run: |
+          $pythonPath = python -c "import sys; print(sys.executable)"
+          Write-Output "Python executable path: $pythonPath"
+
+          $pythonDir = Split-Path $pythonPath
+          Write-Output "Python directory path: $pythonDir"
+
+          echo "PYTHON3_PATH=$pythonDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Use Python path
+        run: |
+          Write-Output "The Python directory is located at: $env:PYTHON3_PATH"
+        shell: pwsh
+
       - name: Build
         run: |
           $ENV:PATH += ";$PWD/core/ten_gn"
-          tgn gen win x64 ${{ matrix.build_type }} -- vs_version=2022 log_level=1 enable_serialized_actions=true ten_enable_test=false
+          tgn gen win x64 ${{ matrix.build_type }} -- vs_version=2022 log_level=1 enable_serialized_actions=true ten_enable_serialized_rust_action=true ten_rust_enable_gen_cargo_config=false ten_enable_cargo_clean=true ten_enable_python_binding=false ten_enable_go_binding=false ten_enable_rust_incremental_build=false ten_manager_enable_frontend=false
           tgn build win x64 ${{ matrix.build_type }}
+
+      - name: Run Tests (ten_utils_unit_test)
+        env:
+          TEN_ENABLE_BACKTRACE_DUMP: "true"
+        run: |
+          chmod +x out/win/x64/tests/standalone/ten_utils_unit_test
+          out/win/x64/tests/standalone/ten_utils_unit_test
+
+      - name: Run Tests (ten_runtime_unit_test)
+        env:
+          TEN_ENABLE_BACKTRACE_DUMP: "true"
+        run: |
+          chmod +x out/win/x64/tests/standalone/ten_runtime_unit_test
+          out/win/x64/tests/standalone/ten_runtime_unit_test
+
+      - name: Run Tests (ten_runtime_smoke_test)
+        env:
+          TEN_ENABLE_BACKTRACE_DUMP: "true"
+        run: |
+          chmod +x out/win/x64/tests/standalone/ten_runtime_smoke_test
+          out/win/x64/tests/standalone/ten_runtime_smoke_test
+
+      - name: Run Tests (ten_rust standalone tests)
+        run: |
+          cd out/win/x64/tests/standalone/ten_rust
+
+          chmod +x unit_test
+          chmod +x integration_test
+
+          ./unit_test || { echo "ten_rust unit test failed"; exit 1; }
+          ./integration_test || { echo "ten_rust integration test failed"; exit 1; }
+
+      - name: Run Tests (ten_manager standalone tests)
+        run: |
+          cd out/win/x64/tests/standalone/ten_manager
+
+          chmod +x unit_test
+
+          ./unit_test || { echo "ten_manager unit test failed"; exit 1; }
+
+      - name: Install Python dependencies via script
+        run: |
+          python .github/tools/setup_pytest_dependencies.py
+
+      - name: Run Tests (ten_manager pytest tests)
+        run: |
+          cd out/win/x64/
+          pytest -s tests/ten_manager/
+
+      - name: Run Tests (ten_runtime pytest tests)
+        env:
+          TEN_ENABLE_BACKTRACE_DUMP: "true"
+        run: |
+          $ENV:PATH += ";$PWD/core/ten_gn"
+          cd out/win/x64/
+          pytest -s tests/ten_runtime/integration/
+      #   continue-on-error: true
+
+      # - name: Setup tmate session
+      #   uses: mxschmitt/action-tmate@v3

@@ -23,7 +23,7 @@ ten_package_test_prepare_app("cpp_app_multi_process_python_app") {
     "cpp_app_multi_process_python_app_source/bin",
   ]
 
-  if (ten_enable_package_manager) {
+  if (ten_enable_ten_manager) {
     deps = [
       "//core/src/ten_manager",
       "//packages/core_apps/default_app_cpp:upload_default_app_cpp_to_server",
@@ -42,9 +42,6 @@ ten_package_test_prepare_auxiliary_resources(
     "__init__.py",
     "test_case.py",
   ]
-  if (enable_sanitizer && !is_clang) {
-    resources += [ "//tests/ten_runtime/integration/tools/use_asan_lib_marker=>use_asan_lib_marker" ]
-  }
 }
 
 group("cpp_app_multi_process_python") {

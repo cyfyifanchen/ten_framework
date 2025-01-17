@@ -15,31 +15,34 @@ use std::path::Path;
 
 use anyhow::Result;
 use json5;
+use jsonschema::Validator;
 
-fn load_schema(content: &str) -> jsonschema::JSONSchema {
+fn load_schema(content: &str) -> Validator {
     // Use json5 to strip comments from the json string.
     let schema_json: serde_json::Value = json5::from_str(content).unwrap();
 
-    jsonschema::JSONSchema::compile(&schema_json).unwrap()
+    jsonschema::validator_for(&schema_json).unwrap()
 }
 
 fn validate_json_object(
     json: &serde_json::Value,
     schema_str: &str,
 ) -> Result<()> {
-    let schema = load_schema(schema_str);
-    let state = schema.validate(json);
+    let validator = load_schema(schema_str);
 
-    if let Err(errors) = state {
-        let mut msgs = String::new();
-        for error in errors {
-            msgs.push_str(&format!("{} @ {}\n", error, error.instance_path));
+    match validator.validate(json) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            let mut msgs = String::new();
+            for error in validator.iter_errors(json) {
+                msgs.push_str(&format!(
+                    "{} @ {}\n",
+                    error, error.instance_path
+                ));
+            }
+            Err(anyhow::anyhow!("{}", msgs))
         }
-
-        return Err(anyhow::anyhow!("{}", msgs));
     }
-
-    Ok(())
 }
 
 pub fn ten_validate_manifest_json_string(data: &str) -> Result<()> {
@@ -181,13 +184,8 @@ mod tests {
           "_ten": {
             "predefined_graphs": [
               {
-                "name": "0",
+                "name": "default",
                 "nodes": [
-                  {
-                    "type": "extension_group",
-                    "name": "default_extension_group",
-                    "addon": "default_extension_group"
-                  },
                   {
                     "type": "extension",
                     "name": "default_extension_cpp",
@@ -216,12 +214,8 @@ mod tests {
           "_ten": {
             "predefined_graphs": [
               {
-                "name": "0",
+                "name": "default",
                 "nodes": [{
-                  "type": "extension_group",
-                  "name": "default_extension_group",
-                  "addon": "default_extension_group"
-                },{
                   "type": "extension",
                   "name": "default_extension_cpp",
                   "addon": "default_extension_cpp",
@@ -229,14 +223,12 @@ mod tests {
                 }],
                 "connections": [
                   {
-                    "extension_group": "default_extension_group",
                     "extension": "default_extension_cpp",
                     "cmd": [
                       {
                         "name": "",
                         "dest": [
                           {
-                            "extension_group": "default_extension_group",
                             "extension": "default_extension_cpp"
                           }
                         ]
@@ -264,12 +256,8 @@ mod tests {
           "_ten": {
             "predefined_graphs": [
               {
-                "name": "0",
+                "name": "default",
                 "nodes": [{
-                  "type": "extension_group",
-                  "name": "default_extension_group",
-                  "addon": "default_extension_group"
-                },{
                   "type": "extension",
                   "name": "default_extension_cpp",
                   "addon": "default_extension_cpp",
@@ -277,7 +265,6 @@ mod tests {
                 }],
                 "connections": [
                   {
-                    "extension_group":"default_extension_group",
                     "extension": "default_extension_cpp",
                     "cmd": [
                       {
@@ -307,13 +294,8 @@ mod tests {
           "_ten": {
             "predefined_graphs": [
               {
-                "name": "0",
+                "name": "default",
                 "nodes": [
-                  {
-                    "type": "extension_group",
-                    "name": "default_extension_group",
-                    "addon": "default_extension_group"
-                  },
                   {
                     "type": "extension",
                     "name": "default_extension_cpp",
@@ -341,13 +323,8 @@ mod tests {
           "_ten": {
             "predefined_graphs": [
               {
-                "name": "0",
+                "name": "default",
                 "nodes": [
-                  {
-                    "type": "extension_group",
-                    "name": "default_extension_group",
-                    "addon": "default_extension_group"
-                  },
                   {
                     "type": "extension",
                     "name": "default_extension_cpp",
@@ -804,7 +781,7 @@ mod tests {
           "type": "extension",
           "name": "embedding",
           "version": "0.1.0",
-                  "dependencies": [
+          "dependencies": [
             {
               "type": "system",
               "name": "ten_runtime_python",
@@ -957,33 +934,27 @@ mod tests {
         {
           "_ten": {
             "predefined_graphs": [{
-              "name": "0",
+              "name": "default",
               "auto_start": false,
               "nodes": [{
-                "type": "extension_group",
-                "name": "result_mapping_1__extension_group",
-                "addon": "default_extension_group"
-              },{
                 "type": "extension",
-                "name": "test extension 1",
+                "name": "test_extension_1",
                 "addon": "result_mapping_1__test_extension_1",
                 "extension_group": "result_mapping_1__extension_group"
               },{
                 "type": "extension",
-                "name": "test extension 2",
+                "name": "test_extension_2",
                 "addon": "result_mapping_1__test_extension_2",
                 "extension_group": "result_mapping_1__extension_group"
               }],
               "connections": [{
                 "app": "msgpack://127.0.0.1:8001/",
-                "extension_group": "result_mapping_1__extension_group",
-                "extension": "test extension 1",
+                "extension": "test_extension_1",
                 "cmd": [{
                   "name": "hello_world",
                   "dest": [{
                     "app": "msgpack://127.0.0.1:8001/",
-                    "extension_group": "result_mapping_1__extension_group",
-                    "extension": "test extension 2",
+                    "extension": "test_extension_2",
                     "msg_conversion": {
                       "type": "per_property",
                       "rules": [{
@@ -1023,12 +994,8 @@ mod tests {
           "_ten": {
             "predefined_graphs": [
               {
-                "name": "0",
+                "name": "default",
                 "nodes": [{
-                  "type": "extension_group",
-                  "name": "default_extension_group",
-                  "addon": "default_extension_group"
-                },{
                   "type": "extension",
                   "name": "default_extension_cpp",
                   "addon": "default_extension_cpp",
@@ -1036,14 +1003,12 @@ mod tests {
                 }],
                 "connections": [
                   {
-                    "extension_group": "default_extension_group",
                     "extension": "default_extension_cpp",
                     "cmd": [
                       {
                         "name": "invalid command",
                         "dest": [
                           {
-                            "extension_group": "default_extension_group",
                             "extension": "default_extension_cpp"
                           }
                         ]
@@ -1130,8 +1095,7 @@ mod tests {
         {
           "_ten": {
             "log_level": 2,
-            "log_file": "api.log",
-            "uri": "localhost"
+            "log_file": "api.log"
           },
           "a": 1,
           "b": "2",

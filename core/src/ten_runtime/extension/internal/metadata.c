@@ -16,8 +16,9 @@
 #include "include_internal/ten_runtime/extension/ten_env/metadata.h"
 #include "include_internal/ten_runtime/extension_thread/extension_thread.h"
 #include "include_internal/ten_utils/lib/placeholder.h"
-#include "ten_utils/macro/check.h"
 #include "ten_utils/lib/string.h"
+#include "ten_utils/log/log.h"
+#include "ten_utils/macro/check.h"
 #include "ten_utils/value/value.h"
 #include "ten_utils/value/value_get.h"
 #include "ten_utils/value/value_is.h"
@@ -190,7 +191,7 @@ static bool ten_extension_graph_property_resolve_placeholders(
       return true;
 
     case TEN_TYPE_STRING: {
-      const char *str_value = ten_value_peek_string(curr_value);
+      const char *str_value = ten_value_peek_raw_str(curr_value, err);
       if (ten_c_str_is_placeholder(str_value)) {
         ten_placeholder_t placeholder;
         ten_placeholder_init(&placeholder);
@@ -310,7 +311,7 @@ bool ten_extension_handle_ten_namespace_properties(
       ten_extension_get_ten_namespace_properties(self);
   if (ten_namespace_properties == NULL) {
     TEN_LOGI("[%s] `%s` section is not found in the property, skip.",
-             ten_extension_get_name(self), TEN_STR_UNDERLINE_TEN);
+             ten_extension_get_name(self, true), TEN_STR_UNDERLINE_TEN);
     return true;
   }
 

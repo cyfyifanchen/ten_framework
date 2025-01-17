@@ -5,6 +5,7 @@
 // Refer to the "LICENSE" file in the root directory for more information.
 //
 pub mod api;
+mod binding;
 mod constants;
 pub mod dependencies;
 pub mod graph;
@@ -12,8 +13,9 @@ pub mod hash;
 pub mod language;
 pub mod manifest;
 pub mod message;
-pub mod pkg_identity;
+pub mod pkg_basic_info;
 pub mod pkg_type;
+pub mod pkg_type_and_name;
 pub mod predefined_graphs;
 pub mod property;
 pub mod supports;
@@ -21,49 +23,40 @@ mod utils;
 pub mod value_type;
 
 use std::{
-    cmp::Ordering,
-    collections::HashSet,
-    hash::{Hash, Hasher},
+    collections::HashMap,
     path::{Path, PathBuf},
 };
 
 use anyhow::Result;
-use semver::Version;
+use graph::Graph;
+use pkg_basic_info::PkgBasicInfo;
+use pkg_type_and_name::PkgTypeAndName;
 
 use crate::schema::store::SchemaStore;
 use api::PkgApi;
 use constants::{
-    APP_PKG_TYPE, ERR_STR_NOT_APP_DIR, EXTENSION_DIR, EXTENSION_GROUP_DIR,
+    ERR_STR_NOT_APP_DIR, EXTENSION_DIR, EXTENSION_GROUP_DIR,
     MANIFEST_JSON_FILENAME, PROTOCOL_DIR, SYSTEM_DIR, TEN_PACKAGES_DIR,
 };
 use dependencies::{get_pkg_dependencies_from_manifest, PkgDependency};
 use manifest::{parse_manifest_from_file, parse_manifest_in_folder, Manifest};
-use pkg_identity::PkgIdentity;
 use pkg_type::PkgType;
 use property::{
     parse_property_from_file, parse_property_in_folder,
-    predefined_graph::PropertyPredefinedGraph, Property,
+    predefined_graph::PredefinedGraph, Property,
 };
-use supports::{get_pkg_supports_from_manifest, PkgSupport};
 
-pub fn default_app_loc() -> String {
+pub fn localhost() -> String {
     "localhost".to_string()
 }
 
 #[derive(Clone, Debug)]
 pub struct PkgInfo {
-    pub pkg_identity: PkgIdentity,
-    pub version: Version,
+    pub basic_info: PkgBasicInfo,
+
     pub dependencies: Vec<PkgDependency>,
     pub api: Option<PkgApi>,
 
-    // Since the declaration 'does not support all environments' has no
-    // practical meaning, not specifying the 'supports' field or specifying an
-    // empty 'supports' field both represent support for all environments.
-    // Therefore, the 'supports' field here is not an option. An empty
-    // 'supports' field represents support for all combinations of
-    // environments.
-    pub supports: Vec<PkgSupport>,
     pub compatible_score: i32,
 
     // Source information.
@@ -77,68 +70,30 @@ pub struct PkgInfo {
     pub schema_store: Option<SchemaStore>,
 }
 
-// Two PkgInfo(s) are equal if their package identify (type & name), version and
-// supports are the same.
-impl Hash for PkgInfo {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.pkg_identity.hash(state);
-        self.version.hash(state);
-        self.supports.hash(state);
-    }
-}
-
-impl PartialEq for PkgInfo {
-    fn eq(&self, other: &Self) -> bool {
-        self.pkg_identity == other.pkg_identity && self.version == other.version
-    }
-}
-
-impl Eq for PkgInfo {}
-
-impl PartialOrd for PkgInfo {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for PkgInfo {
-    fn cmp(&self, other: &Self) -> Ordering {
-        if self.pkg_identity.pkg_type != other.pkg_identity.pkg_type {
-            return self
-                .pkg_identity
-                .pkg_type
-                .cmp(&other.pkg_identity.pkg_type);
-        }
-
-        if self.pkg_identity.name != other.pkg_identity.name {
-            self.pkg_identity.name.cmp(&other.pkg_identity.name)
-        } else {
-            self.version.cmp(&other.version)
-        }
-    }
-}
-
 impl PkgInfo {
     pub fn from_metadata(
         manifest: &Manifest,
         property: &Option<Property>,
     ) -> Result<Self> {
-        Ok(PkgInfo {
-            pkg_identity: PkgIdentity::from_manifest(manifest)?,
-            version: Version::parse(&manifest.version)?,
+        let mut pkg_info = PkgInfo {
+            basic_info: PkgBasicInfo::try_from(manifest)?,
+
             dependencies: get_pkg_dependencies_from_manifest(manifest)?,
             api: PkgApi::from_manifest(manifest)?,
-            supports: get_pkg_supports_from_manifest(manifest)?,
             compatible_score: -1,
 
             is_local_installed: false,
-            url: "".to_string(),
-            hash: manifest.gen_hash_hex()?,
+            url: String::new(),
+            hash: String::new(),
 
             manifest: Some(manifest.clone()),
             property: property.clone(),
             schema_store: SchemaStore::from_manifest(manifest)?,
-        })
+        };
+
+        pkg_info.hash = pkg_info.gen_hash_hex();
+
+        Ok(pkg_info)
     }
 
     pub fn is_manifest_equal_to_fs(&self) -> Result<bool> {
@@ -151,7 +106,8 @@ impl PkgInfo {
             None => return Ok(false),
         };
 
-        let manifest_json_path = PathBuf::from(&self.url).join("manifest.json");
+        let manifest_json_path =
+            PathBuf::from(&self.url).join(MANIFEST_JSON_FILENAME);
         let manifest_from_fs: Manifest =
             parse_manifest_from_file(&manifest_json_path)?;
 
@@ -183,9 +139,7 @@ impl PkgInfo {
         Ok(property_pkg_json == property_fs_json)
     }
 
-    pub fn get_predefined_graphs(
-        &self,
-    ) -> Option<&Vec<PropertyPredefinedGraph>> {
+    pub fn get_predefined_graphs(&self) -> Option<&Vec<PredefinedGraph>> {
         if let Some(property) = &self.property {
             if let Some(ten) = &property._ten {
                 return ten.predefined_graphs.as_ref();
@@ -195,10 +149,7 @@ impl PkgInfo {
         None
     }
 
-    pub fn update_predefined_graph(
-        &mut self,
-        new_graph: &PropertyPredefinedGraph,
-    ) {
+    pub fn update_predefined_graph(&mut self, new_graph: &PredefinedGraph) {
         if let Some(property) = &mut self.property {
             if let Some(ten) = &mut property._ten {
                 if let Some(predefined_graphs) = &mut ten.predefined_graphs {
@@ -212,14 +163,22 @@ impl PkgInfo {
             }
         }
     }
+
+    pub fn get_dependency_by_type_and_name(
+        &self,
+        pkg_type: &str,
+        pkg_name: &str,
+    ) -> Option<&PkgDependency> {
+        self.dependencies.iter().find(|dep| {
+            dep.type_and_name.pkg_type.to_string() == pkg_type
+                && dep.type_and_name.name == pkg_name
+        })
+    }
 }
 
 pub fn get_pkg_info_from_path(pkg_path: &Path) -> Result<PkgInfo> {
     let manifest = parse_manifest_in_folder(pkg_path)?;
-    let property = match parse_property_in_folder(pkg_path) {
-        Ok(prop) => Some(prop),
-        Err(_) => None,
-    };
+    let property = parse_property_in_folder(pkg_path)?;
 
     let mut pkg_info: PkgInfo = PkgInfo::from_metadata(&manifest, &property)?;
 
@@ -231,42 +190,37 @@ pub fn get_pkg_info_from_path(pkg_path: &Path) -> Result<PkgInfo> {
 
 fn collect_pkg_info_from_path(
     base_path: &Path,
-    pkgs_info: &mut HashSet<PkgInfo>,
+    pkgs_info: &mut HashMap<PkgTypeAndName, PkgInfo>,
 ) -> Result<Manifest> {
     let pkg_info = get_pkg_info_from_path(base_path)?;
 
-    if pkgs_info.contains(&pkg_info) {
+    let pkg_type_name = PkgTypeAndName::from(&pkg_info);
+    if pkgs_info.contains_key(&pkg_type_name) {
         return Err(anyhow::anyhow!(
             "Duplicated package, type: {}, name: {}",
-            pkg_info.pkg_identity.pkg_type,
-            pkg_info.pkg_identity.name
+            pkg_info.basic_info.type_and_name.pkg_type,
+            pkg_info.basic_info.type_and_name.name
         ));
     }
 
     let manifest = pkg_info.manifest.clone().unwrap().clone();
 
-    pkgs_info.insert(pkg_info);
+    pkgs_info.insert(pkg_type_name, pkg_info);
 
     Ok(manifest)
 }
 
-pub fn get_all_existed_pkgs_info_of_app_to_hashset(
+pub fn get_all_existed_pkgs_info_of_app_to_hashmap(
     app_path: &Path,
-) -> Result<HashSet<PkgInfo>> {
-    let mut pkgs_info: HashSet<PkgInfo> = HashSet::new();
+) -> Result<HashMap<PkgTypeAndName, PkgInfo>> {
+    let mut pkgs_info: HashMap<PkgTypeAndName, PkgInfo> = HashMap::new();
 
     // Process the manifest.json file in the root path.
-    match collect_pkg_info_from_path(app_path, &mut pkgs_info) {
-        Ok(manifest) => {
-            if manifest.pkg_type != APP_PKG_TYPE {
-                return Err(anyhow::anyhow!(ERR_STR_NOT_APP_DIR));
-            }
-            manifest
-        }
-        Err(_) => {
-            return Err(anyhow::anyhow!(ERR_STR_NOT_APP_DIR));
-        }
-    };
+    let app_pkg_manifest =
+        collect_pkg_info_from_path(app_path, &mut pkgs_info)?;
+    if app_pkg_manifest.type_and_name.pkg_type != PkgType::App {
+        return Err(anyhow::anyhow!(ERR_STR_NOT_APP_DIR));
+    }
 
     // Define paths to include manifest.json files from.
     let addon_types =
@@ -287,28 +241,31 @@ pub fn get_all_existed_pkgs_info_of_app_to_hashset(
                             parse_manifest_from_file(&manifest_path)?;
 
                         // Do some simple checks.
-                        if manifest.name
+                        if manifest.type_and_name.name
                             != path.file_name().unwrap().to_str().unwrap()
                         {
                             return Err(anyhow::anyhow!(
                                 "The path '{}' is not valid: {}.",
-                                format!("{}:{}",manifest.pkg_type, manifest.name),
+                                format!("{}:{}",manifest.type_and_name.pkg_type, manifest.type_and_name.name),
                                 format!(
                                     "the path '{}' and the name '{}' of the package are different",
-                                    path.file_name().unwrap().to_str().unwrap(), manifest.name
+                                    path.file_name().unwrap().to_str().unwrap(), manifest.type_and_name.name
                             )));
                         }
 
-                        if manifest.pkg_type != addon_type {
+                        if manifest.type_and_name.pkg_type.to_string()
+                            != addon_type
+                        {
                             return Err(anyhow::anyhow!(
                                 "The path '{}' is not valid: {}.",
                                 format!(
                                     "{}:{}",
-                                    manifest.pkg_type, manifest.name
+                                    manifest.type_and_name.pkg_type,
+                                    manifest.type_and_name.name
                                 ),
                                 format!(
                                 "the package type '{}' is not as expected '{}'",
-                                manifest.pkg_type, addon_type)
+                                manifest.type_and_name.pkg_type, addon_type)
                             ));
                         }
 
@@ -331,8 +288,8 @@ pub fn get_all_existed_pkgs_info_of_app_to_hashset(
 pub fn get_all_existed_pkgs_info_of_app(
     app_path: &Path,
 ) -> Result<Vec<PkgInfo>> {
-    let result = get_all_existed_pkgs_info_of_app_to_hashset(app_path)?;
-    Ok(result.into_iter().collect())
+    let result = get_all_existed_pkgs_info_of_app_to_hashmap(app_path)?;
+    Ok(result.into_values().collect())
 }
 
 pub fn find_untracked_local_packages<'a>(
@@ -342,17 +299,17 @@ pub fn find_untracked_local_packages<'a>(
     let mut untracked_local_packages: Vec<&PkgInfo> = vec![];
 
     for local_pkg in local_pkgs {
-        let pkg_identity = &local_pkg.pkg_identity;
-
-        if pkg_identity.pkg_type == PkgType::App {
+        if local_pkg.basic_info.type_and_name.pkg_type == PkgType::App {
             continue;
         }
 
         // Check if the package is in dependencies list.
-        if !dependencies
-            .iter()
-            .any(|dependency| dependency.pkg_identity == *pkg_identity)
-        {
+        if !dependencies.iter().any(|dependency| {
+            dependency.basic_info.type_and_name.pkg_type
+                == local_pkg.basic_info.type_and_name.pkg_type
+                && dependency.basic_info.type_and_name.name
+                    == local_pkg.basic_info.type_and_name.name
+        }) {
             untracked_local_packages.push(local_pkg);
         }
     }
@@ -375,11 +332,12 @@ pub fn find_to_be_replaced_local_pkgs<'a>(
     let mut result: Vec<(&PkgInfo, &PkgInfo)> = vec![];
 
     for local_pkg in local_pkgs {
-        let pkg_identity = local_pkg.pkg_identity.clone();
-
-        let pkg_in_dependencies = dependencies
-            .iter()
-            .find(|pkg| pkg.pkg_identity == pkg_identity);
+        let pkg_in_dependencies = dependencies.iter().find(|pkg| {
+            pkg.basic_info.type_and_name.pkg_type
+                == local_pkg.basic_info.type_and_name.pkg_type
+                && pkg.basic_info.type_and_name.name
+                    == local_pkg.basic_info.type_and_name.name
+        });
 
         if let Some(pkg_in_dependencies) = pkg_in_dependencies {
             // If the supports of a locally installed package are incompatible,
@@ -399,4 +357,43 @@ pub fn find_to_be_replaced_local_pkgs<'a>(
     }
 
     result
+}
+
+/// Check the graph for current app.
+///
+/// # Arguments
+/// * `app_base_dir` - The absolute path of the app base directory, required.
+/// * `graph_json` - The graph definition in JSON format, required.
+/// * `app_uri` - The `_ten::uri` of the app, required. We do not read this
+///   content from property.json of app, because the property.json might not
+///   exist. Ex: the property of app might be customized using
+///   `init_property_from_json` in `on_configure` method.
+pub fn ten_rust_check_graph_for_app(
+    app_base_dir: &str,
+    graph_json: &str,
+    app_uri: &str,
+) -> Result<()> {
+    let app_path = Path::new(app_base_dir);
+    if !app_path.exists() {
+        return Err(anyhow::anyhow!(
+            "The app base dir [{}] is not found.",
+            app_base_dir
+        ));
+    }
+
+    let mut pkgs_of_app: HashMap<String, Vec<PkgInfo>> = HashMap::new();
+    let pkgs_info = get_all_existed_pkgs_info_of_app(app_path)?;
+    pkgs_of_app.insert(app_uri.to_string(), pkgs_info);
+
+    // `Graph::from_str` calls `validate`, and `validate` checks that there are
+    // no `localhost` entries in the graph JSON (as per our rule). However, the
+    // TEN runtime first processes the content of the graph JSON, inserting
+    // the appropriate `localhost` string before passing it to the Rust
+    // side. Therefore, the graph JSON received here might already includes the
+    // `localhost` string processed by the TEN runtime, so `Graph::from_str`
+    // cannot be used in this context.
+    //
+    // let graph = Graph::from_str(graph_json)?;
+    let graph: Graph = serde_json::from_str(graph_json)?;
+    graph.check_for_single_app(&pkgs_of_app)
 }

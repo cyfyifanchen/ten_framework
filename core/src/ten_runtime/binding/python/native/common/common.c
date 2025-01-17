@@ -4,7 +4,7 @@
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
 //
-#include "ten_runtime/binding/python/common.h"
+#include "include_internal/ten_runtime/binding/python/common.h"
 
 #include "include_internal/ten_runtime/binding/python/common/common.h"
 #include "include_internal/ten_runtime/binding/python/common/python_stuff.h"
@@ -74,24 +74,6 @@ void ten_py_initialize_with_config(const char *program,
 
 int ten_py_finalize(void) { return Py_FinalizeEx(); }
 
-void ten_py_set_program_name(const char *program_name) {
-  Py_SetProgramName(Py_DecodeLocale(program_name, NULL));
-}
-
-void ten_py_set_argv(int argc, char **argv) {
-  // Convert char** to wchar_t**
-  wchar_t **argv_wide = PyMem_Malloc(sizeof(wchar_t *) * argc);
-  for (int i = 0; i < argc; i++) {
-    argv_wide[i] = Py_DecodeLocale(argv[i], NULL);
-  }
-
-  PySys_SetArgv(argc, argv_wide);
-
-  for (int i = 0; i < argc; i++) {
-    PyMem_Free(argv_wide[i]);
-  }
-}
-
 void ten_py_add_paths_to_sys(ten_list_t *paths) {
   PyObject *sys_module = PyImport_ImportModule("sys");
   if (sys_module == NULL) {
@@ -156,6 +138,8 @@ void ten_py_eval_restore_thread(void *state) {
 }
 
 PyGILState_STATE ten_py_gil_state_ensure(void) {
+  // The logic inside PyGILState_Ensure is as follows:
+  //
   // 1) Retrieves the PyThreadState for the current thread using
   //    'pthread_getspecific'.
   //    - If a PyThreadState exists, checks whether the current thread holds the
@@ -177,10 +161,4 @@ void ten_py_gil_state_release(PyGILState_STATE state) {
 bool ten_py_is_holding_gil(void) {
   // Judge whether the current thread holds the GIL, 1: true, 0: false.
   return PyGILState_Check() == 1;
-}
-
-PyThreadState *ten_py_gil_state_get_this_thread_state(void) {
-  // If no GILState APIs have been called on the current thread, return NULL.
-  // Otherwise, return the PyThreadState associated with the current thread.
-  return PyGILState_GetThisThreadState();
 }

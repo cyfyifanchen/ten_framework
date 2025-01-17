@@ -15,14 +15,13 @@ use tempfile::NamedTempFile;
 use walkdir::WalkDir;
 use zip::ZipArchive;
 
-use super::found_result::RegistryPackageData;
+use ten_rust::pkg_info::manifest::Manifest;
+use ten_rust::pkg_info::pkg_type::PkgType;
+use ten_rust::pkg_info::PkgInfo;
+
 use super::{FoundResult, SearchCriteria};
 use crate::config::TmanConfig;
 use crate::constants::{MANIFEST_JSON_FILENAME, TEN_PACKAGE_FILE_EXTENSION};
-use ten_rust::pkg_info::manifest::Manifest;
-use ten_rust::pkg_info::pkg_identity::PkgIdentity;
-use ten_rust::pkg_info::pkg_type::PkgType;
-use ten_rust::pkg_info::PkgInfo;
 
 pub async fn upload_package(
     base_url: &str,
@@ -47,9 +46,9 @@ pub async fn upload_package(
     let dir_path = PathBuf::from(format!(
         "{}{}/{}/{}/",
         path_url,
-        pkg_info.pkg_identity.pkg_type,
-        pkg_info.pkg_identity.name,
-        pkg_info.version
+        pkg_info.basic_info.type_and_name.pkg_type,
+        pkg_info.basic_info.type_and_name.name,
+        pkg_info.basic_info.version
     ));
 
     // Check if the directory exists, and only create it if it doesn't.
@@ -89,7 +88,7 @@ pub async fn upload_package(
 }
 
 pub async fn get_package(
-    tman_config: &TmanConfig,
+    _tman_config: &TmanConfig,
     url: &str,
     temp_path: &mut NamedTempFile,
 ) -> Result<()> {
@@ -116,12 +115,11 @@ pub async fn get_package(
 
 fn find_file_with_criteria(
     base_url: &Path,
-    pkg_identity: &PkgIdentity,
+    pkg_type: PkgType,
+    name: &String,
     criteria: &SearchCriteria,
 ) -> Result<Vec<FoundResult>> {
-    let target_path = base_url
-        .join(pkg_identity.pkg_type.to_string())
-        .join(&pkg_identity.name);
+    let target_path = base_url.join(pkg_type.to_string()).join(name);
 
     let mut results = Vec::<FoundResult>::new();
 
@@ -173,20 +171,7 @@ fn find_file_with_criteria(
                                         )
                                     )?,
                                 )),
-                                package_data: RegistryPackageData {
-                                    pkg_type: manifest
-                                        .pkg_type
-                                        .parse::<PkgType>()?,
-                                    name: manifest.name.clone(),
-                                    version: manifest.version.parse()?,
-                                    dependencies: manifest
-                                        .dependencies
-                                        .clone()
-                                        .map_or(vec![], |d| d),
-                                    supports: manifest.supports.clone(),
-
-                                    hash: manifest.gen_hash_hex()?,
-                                },
+                                pkg_registry_info: (&manifest).try_into()?,
                             });
 
                             // Stop processing after finding the manifest.
@@ -202,9 +187,10 @@ fn find_file_with_criteria(
 }
 
 pub async fn get_package_list(
-    tman_config: &TmanConfig,
+    _tman_config: &TmanConfig,
     base_url: &str,
-    pkg_identity: &PkgIdentity,
+    pkg_type: PkgType,
+    name: &String,
     criteria: &SearchCriteria,
 ) -> Result<Vec<FoundResult>> {
     let mut path_url = url::Url::parse(base_url)
@@ -221,15 +207,20 @@ pub async fn get_package_list(
         format!("{}/", path_url)
     };
 
-    let result =
-        find_file_with_criteria(Path::new(&path_url), pkg_identity, criteria)?;
+    let result = find_file_with_criteria(
+        Path::new(&path_url),
+        pkg_type,
+        name,
+        criteria,
+    )?;
 
     Ok(result)
 }
 
 pub async fn delete_package(
     base_url: &str,
-    pkg_identity: &PkgIdentity,
+    pkg_type: PkgType,
+    name: &String,
     version: &Version,
     hash: &String,
 ) -> Result<()> {
@@ -250,7 +241,7 @@ pub async fn delete_package(
     // Construct the directory path.
     let dir_path = PathBuf::from(format!(
         "{}{}/{}/{}/",
-        path_url, pkg_identity.pkg_type, pkg_identity.name, version
+        path_url, pkg_type, name, version
     ));
 
     if dir_path.exists() {

@@ -9,9 +9,9 @@
 #include "include_internal/ten_runtime/binding/python/common/error.h"
 #include "include_internal/ten_runtime/binding/python/msg/msg.h"
 #include "include_internal/ten_runtime/msg/msg.h"
-#include "ten_utils/macro/check.h"
 #include "memoryobject.h"
 #include "ten_runtime/msg/video_frame/video_frame.h"
+#include "ten_utils/macro/check.h"
 #include "ten_utils/macro/mark.h"
 
 static ten_py_video_frame_t *ten_py_video_frame_create_internal(
@@ -30,24 +30,26 @@ static ten_py_video_frame_t *ten_py_video_frame_create_internal(
 }
 
 static ten_py_video_frame_t *ten_py_video_frame_init(
-    ten_py_video_frame_t *py_video_frame, TEN_UNUSED PyObject *args,
-    TEN_UNUSED PyObject *kw) {
+    ten_py_video_frame_t *py_video_frame, const char *name) {
   TEN_ASSERT(py_video_frame &&
                  ten_py_msg_check_integrity((ten_py_msg_t *)py_video_frame),
              "Invalid argument.");
 
-  py_video_frame->msg.c_msg =
-      ten_msg_create_from_msg_type(TEN_MSG_TYPE_VIDEO_FRAME);
+  py_video_frame->msg.c_msg = ten_video_frame_create(name, NULL);
 
   return py_video_frame;
 }
 
-PyObject *ten_py_video_frame_create(PyTypeObject *type,
-                                    TEN_UNUSED PyObject *args,
+PyObject *ten_py_video_frame_create(PyTypeObject *type, PyObject *args,
                                     TEN_UNUSED PyObject *kwds) {
+  const char *name = NULL;
+  if (!PyArg_ParseTuple(args, "s", &name)) {
+    return ten_py_raise_py_value_error_exception("Failed to parse arguments.");
+  }
+
   ten_py_video_frame_t *py_video_frame =
       ten_py_video_frame_create_internal(type);
-  return (PyObject *)ten_py_video_frame_init(py_video_frame, args, kwds);
+  return (PyObject *)ten_py_video_frame_init(py_video_frame, name);
 }
 
 void ten_py_video_frame_destroy(PyObject *self) {
@@ -262,7 +264,7 @@ PyObject *ten_py_video_frame_is_eof(PyObject *self, PyObject *args) {
   return PyBool_FromLong(ten_video_frame_is_eof(py_video_frame->msg.c_msg));
 }
 
-PyObject *ten_py_video_frame_set_is_eof(PyObject *self, PyObject *args) {
+PyObject *ten_py_video_frame_set_eof(PyObject *self, PyObject *args) {
   ten_py_video_frame_t *py_video_frame = (ten_py_video_frame_t *)self;
   TEN_ASSERT(py_video_frame &&
                  ten_py_msg_check_integrity((ten_py_msg_t *)py_video_frame),
@@ -273,7 +275,7 @@ PyObject *ten_py_video_frame_set_is_eof(PyObject *self, PyObject *args) {
     return ten_py_raise_py_value_error_exception("Invalid is_eof.");
   }
 
-  ten_video_frame_set_is_eof(py_video_frame->msg.c_msg, is_eof);
+  ten_video_frame_set_eof(py_video_frame->msg.c_msg, is_eof);
 
   Py_RETURN_NONE;
 }

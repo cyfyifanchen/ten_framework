@@ -16,6 +16,7 @@
 #include "ten_utils/io/runloop.h"
 #include "ten_utils/lib/alloc.h"
 #include "ten_utils/lib/smart_ptr.h"
+#include "ten_utils/log/log.h"
 #include "ten_utils/macro/check.h"
 #include "ten_utils/macro/mark.h"
 
@@ -134,6 +135,14 @@ static void ten_timer_on_trigger(ten_timer_t *self,
       self->on_trigger(self, self->on_trigger_data);
     }
 
+    if (!self->auto_restart) {
+      // If the timer is _not_ auto_restart, it will not automatically start the
+      // next round of timing or close itself after each timeout trigger.
+      // Instead, it will only do so when the user manually enables the timer
+      // again.
+      return;
+    }
+
     if (self->requested_times == TEN_TIMER_INFINITE ||
         self->times < self->requested_times) {
       // Setup the next timeout.
@@ -163,6 +172,7 @@ static ten_timer_t *ten_timer_create_internal(ten_runloop_t *runloop) {
 
   self->id = 0;
   self->times = 0;
+  self->auto_restart = true;
 
   ten_loc_init_empty(&self->src_loc);
 
@@ -193,7 +203,7 @@ error:
 }
 
 ten_timer_t *ten_timer_create(ten_runloop_t *runloop, uint64_t timeout_in_us,
-                              int32_t requested_times) {
+                              int32_t requested_times, bool auto_restart) {
   TEN_ASSERT(runloop && ten_runloop_check_integrity(runloop, true),
              "Should not happen.");
 
@@ -204,6 +214,7 @@ ten_timer_t *ten_timer_create(ten_runloop_t *runloop, uint64_t timeout_in_us,
 
   self->timeout_in_us = timeout_in_us;
   self->requested_times = requested_times;
+  self->auto_restart = auto_restart;
 
   return self;
 }
@@ -222,7 +233,7 @@ ten_timer_t *ten_timer_create_with_cmd(ten_shared_ptr_t *cmd,
   self->id = ten_cmd_timer_get_timer_id(cmd);
   self->timeout_in_us = ten_cmd_timer_get_timeout_in_us(cmd);
   self->requested_times = ten_cmd_timer_get_times(cmd);
-  ten_loc_init_from_loc(&self->src_loc, ten_msg_get_src_loc(cmd));
+  ten_loc_set_from_loc(&self->src_loc, ten_msg_get_src_loc(cmd));
 
   return self;
 }
@@ -237,6 +248,7 @@ void ten_timer_destroy(ten_timer_t *self) {
 
   ten_sanitizer_thread_check_deinit(&self->thread_check);
   ten_signature_set(&self->signature, 0);
+  ten_loc_deinit(&self->src_loc);
 
   TEN_FREE(self);
 }
@@ -255,6 +267,14 @@ void ten_timer_enable(ten_timer_t *self) {
   TEN_ASSERT(self && ten_timer_check_integrity(self, true) &&
                  ten_runloop_check_integrity(self->runloop, true),
              "Should not happen.");
+
+  if (self->requested_times != TEN_TIMER_INFINITE &&
+      self->times >= self->requested_times) {
+    // The timer has ended, so it should not be enabled again.
+    ten_timer_stop_async(self);
+    ten_timer_close_async(self);
+    return;
+  }
 
   ten_runloop_timer_set_timeout(self->backend, self->timeout_in_us / 1000, 0);
 

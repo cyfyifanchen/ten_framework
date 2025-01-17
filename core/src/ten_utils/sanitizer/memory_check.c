@@ -24,6 +24,10 @@
 #include "ten_utils/macro/check.h"
 #include "ten_utils/macro/mark.h"
 
+// Note: Since TEN LOG also involves memory operations, to avoid circular
+// dependencies in the memory checker system, use the basic printf family
+// functions instead of TEN LOG.
+
 // Note: The `ten_sanitizer_memory_record_t` items stored in
 // `ten_sanitizer_memory_records_t` not only contain the actual allocated memory
 // region addresses but also include other auxiliary allocations used to record
@@ -46,12 +50,12 @@ static void ten_sanitizer_memory_record_check_enabled(void) {
   if (enable_memory_sanitizer && !strcmp(enable_memory_sanitizer, "true")) {
     g_memory_records_enabled = true;
   }
-#else
-  TEN_LOGI("The memory check is disabled.");
 #endif
 }
 
 void ten_sanitizer_memory_record_init(void) {
+#if defined(TEN_ENABLE_MEMORY_CHECK)
+
 #if defined(TEN_USE_ASAN)
   __lsan_disable();
 #endif
@@ -73,9 +77,13 @@ void ten_sanitizer_memory_record_init(void) {
 #if defined(TEN_USE_ASAN)
   __lsan_enable();
 #endif
+
+#endif
 }
 
 void ten_sanitizer_memory_record_deinit(void) {
+#if defined(TEN_ENABLE_MEMORY_CHECK)
+
 #if defined(TEN_USE_ASAN)
   __lsan_disable();
 #endif
@@ -89,6 +97,8 @@ void ten_sanitizer_memory_record_deinit(void) {
 #if defined(TEN_USE_ASAN)
   __lsan_enable();
 #endif
+
+#endif
 }
 
 static ten_sanitizer_memory_record_t *ten_sanitizer_memory_record_create(
@@ -99,7 +109,7 @@ static ten_sanitizer_memory_record_t *ten_sanitizer_memory_record_create(
 #endif
 
   ten_sanitizer_memory_record_t *self =
-      ten_malloc(sizeof(ten_sanitizer_memory_record_t));
+      malloc(sizeof(ten_sanitizer_memory_record_t));
   TEN_ASSERT(self, "Failed to allocate memory.");
   if (!self) {
 #if defined(TEN_USE_ASAN)
@@ -111,12 +121,23 @@ static ten_sanitizer_memory_record_t *ten_sanitizer_memory_record_create(
   self->addr = addr;
   self->size = size;
 
-  ten_string_init_formatted(&self->func_name, "%s", func_name);
+  self->func_name = (char *)malloc(strlen(func_name) + 1);
+  TEN_ASSERT(self->func_name, "Failed to allocate memory.");
 
-  ten_string_init_formatted(
-      &self->file_name, "%.*s",
-      strlen(file_name) - TEN_FILE_PATH_RELATIVE_PREFIX_LENGTH,
-      file_name + TEN_FILE_PATH_RELATIVE_PREFIX_LENGTH);
+  int written =
+      snprintf(self->func_name, strlen(func_name) + 1, "%s", func_name);
+  TEN_ASSERT(written > 0, "Should not happen.");
+
+  self->file_name = (char *)malloc(strlen(file_name) + 1);
+  TEN_ASSERT(self->file_name, "Failed to allocate memory.");
+  TEN_ASSERT(strlen(file_name) >= TEN_FILE_PATH_RELATIVE_PREFIX_LENGTH,
+             "Should not happen.");
+
+  written =
+      snprintf(self->file_name, strlen(file_name) + 1, "%.*s",
+               (int)(strlen(file_name) - TEN_FILE_PATH_RELATIVE_PREFIX_LENGTH),
+               file_name + TEN_FILE_PATH_RELATIVE_PREFIX_LENGTH);
+  TEN_ASSERT(written > 0, "Should not happen.");
 
   self->lineno = lineno;
 
@@ -135,8 +156,9 @@ static void ten_sanitizer_memory_record_destroy(
 
   TEN_ASSERT(self, "Invalid argument.");
 
-  ten_string_deinit(&self->file_name);
-  ten_free(self);
+  free(self->func_name);
+  free(self->file_name);
+  free(self);
 
 #if defined(TEN_USE_ASAN)
   __lsan_enable();
@@ -208,6 +230,7 @@ static void ten_sanitizer_memory_record_del(
     ten_sanitizer_memory_record_t *record = ten_ptr_listnode_get(iter.node);
 
     if (record->addr == addr) {
+      TEN_ASSERT(self->total_size >= record->size, "Should not happen.");
       self->total_size -= record->size;
       ten_list_remove_node(&self->records, iter.node);
       break;
@@ -243,8 +266,8 @@ void ten_sanitizer_memory_record_dump(void) {
   TEN_ASSERT(!rc, "Failed to lock.");
 
   if (g_memory_records.total_size) {
-    TEN_LOGD("Memory allocation summary(%zu bytes):",
-             g_memory_records.total_size);
+    (void)fprintf(stderr, "Memory allocation summary(%zu bytes):\n",
+                  g_memory_records.total_size);
   }
 
 #if defined(TEN_USE_ASAN)
@@ -263,9 +286,8 @@ void ten_sanitizer_memory_record_dump(void) {
 
     ten_sanitizer_memory_record_t *info = ten_ptr_listnode_get(iter.node);
 
-    TEN_LOGE("\t#%ld %p(%ld bytes) in %s %s:%d", idx, info->addr, info->size,
-             ten_string_get_raw_str(&info->func_name),
-             ten_string_get_raw_str(&info->file_name), info->lineno);
+    (void)fprintf(stderr, "\t#%zu %p(%zu bytes) in %s %s:%d\n", idx, info->addr,
+                  info->size, info->func_name, info->file_name, info->lineno);
 
     idx++;
 
@@ -288,7 +310,7 @@ void ten_sanitizer_memory_record_dump(void) {
   TEN_ASSERT(!rc, "Failed to unlock.");
 
   if (total_size) {
-    TEN_LOGE("Memory leak with %zu bytes.", total_size);
+    (void)fprintf(stderr, "Memory leak with %zu bytes.\n", total_size);
 
 #if defined(TEN_USE_ASAN)
     __lsan_enable();
@@ -302,13 +324,13 @@ void ten_sanitizer_memory_record_dump(void) {
 #endif
 
 #else
-  TEN_LOGI("The memory check is disabled.");
+  (void)fprintf(stderr, "The memory check is disabled.");
 #endif
 }
 
 void *ten_sanitizer_memory_malloc(size_t size, const char *file_name,
                                   uint32_t lineno, const char *func_name) {
-  void *self = ten_malloc(size);
+  void *self = malloc(size);
   TEN_ASSERT(self, "Failed to allocate memory.");
   if (!self) {
     return NULL;
@@ -322,7 +344,7 @@ void *ten_sanitizer_memory_malloc(size_t size, const char *file_name,
       self, size, file_name, lineno, func_name);
   TEN_ASSERT(record, "Should not happen.");
   if (!record) {
-    ten_free(self);
+    free(self);
     return NULL;
   }
 
@@ -353,7 +375,7 @@ void *ten_sanitizer_memory_calloc(size_t cnt, size_t size,
       self, total_size, file_name, lineno, func_name);
   TEN_ASSERT(record, "Should not happen.");
   if (!record) {
-    ten_free(self);
+    free(self);
     return NULL;
   }
 
@@ -374,7 +396,7 @@ void ten_sanitizer_memory_free(void *addr) {
   ten_sanitizer_memory_record_del(&g_memory_records, addr);
 
 done:
-  ten_free(addr);
+  free(addr);
 }
 
 void *ten_sanitizer_memory_realloc(void *addr, size_t size,
@@ -393,11 +415,16 @@ void *ten_sanitizer_memory_realloc(void *addr, size_t size,
     ten_sanitizer_memory_record_t *record = ten_sanitizer_memory_record_create(
         self, size, file_name, lineno, func_name);
     if (!record) {
-      ten_free(self);
-      ten_sanitizer_memory_record_del(&g_memory_records, addr);
+      free(self);
+      if (addr != NULL) {
+        ten_sanitizer_memory_record_del(&g_memory_records, addr);
+      }
       return NULL;
     }
 
+    if (addr != NULL) {
+      ten_sanitizer_memory_record_del(&g_memory_records, addr);
+    }
     ten_sanitizer_memory_record_add(&g_memory_records, record);
   }
 
@@ -427,7 +454,7 @@ char *ten_sanitizer_memory_strdup(const char *str, const char *file_name,
   ten_sanitizer_memory_record_t *record = ten_sanitizer_memory_record_create(
       self, strlen(self), file_name, lineno, func_name);
   if (!record) {
-    ten_free(self);
+    free(self);
     return NULL;
   }
 
@@ -455,7 +482,7 @@ char *ten_sanitizer_memory_strndup(const char *str, size_t size,
   ten_sanitizer_memory_record_t *record = ten_sanitizer_memory_record_create(
       self, strlen(self), file_name, lineno, func_name);
   if (!record) {
-    ten_free(self);
+    free(self);
     return NULL;
   }
 

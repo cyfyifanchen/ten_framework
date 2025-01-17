@@ -22,16 +22,13 @@ typedef struct ten_py_msg_t {
   ten_shared_ptr_t *c_msg;
 } ten_py_msg_t;
 
-TEN_RUNTIME_PRIVATE_API PyObject *ten_py_msg_to_json(PyObject *self,
-                                                     PyObject *args);
-
-TEN_RUNTIME_PRIVATE_API PyObject *ten_py_msg_from_json(PyObject *self,
-                                                       PyObject *args);
-
 TEN_RUNTIME_PRIVATE_API PyObject *ten_py_msg_get_name(PyObject *self,
                                                       PyObject *args);
 
 TEN_RUNTIME_PRIVATE_API PyObject *ten_py_msg_set_name(PyObject *self,
+                                                      PyObject *args);
+
+TEN_RUNTIME_PRIVATE_API PyObject *ten_py_msg_set_dest(PyObject *self,
                                                       PyObject *args);
 
 TEN_RUNTIME_PRIVATE_API PyObject *ten_py_msg_set_property_string(

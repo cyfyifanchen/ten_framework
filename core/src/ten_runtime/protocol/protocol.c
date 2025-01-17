@@ -9,7 +9,6 @@
 #include "include_internal/ten_runtime/addon/addon.h"
 #include "include_internal/ten_runtime/addon/protocol/protocol.h"
 #include "include_internal/ten_runtime/app/app.h"
-#include "include_internal/ten_runtime/common/closeable.h"
 #include "include_internal/ten_runtime/common/constant_str.h"
 #include "include_internal/ten_runtime/connection/connection.h"
 #include "include_internal/ten_runtime/connection/migration.h"
@@ -19,15 +18,16 @@
 #include "include_internal/ten_runtime/protocol/close.h"
 #include "include_internal/ten_runtime/remote/remote.h"
 #include "include_internal/ten_utils/log/log.h"
-#include "ten_utils/macro/check.h"
 #include "ten_runtime/addon/addon.h"
 #include "ten_runtime/app/app.h"
 #include "ten_runtime/protocol/close.h"
+#include "ten_runtime/protocol/protocol.h"
 #include "ten_utils/lib/error.h"
 #include "ten_utils/lib/mutex.h"
 #include "ten_utils/lib/ref.h"
 #include "ten_utils/lib/smart_ptr.h"
 #include "ten_utils/lib/uri.h"
+#include "ten_utils/macro/check.h"
 #include "ten_utils/macro/mark.h"
 #include "ten_utils/sanitizer/thread_check.h"
 #include "ten_utils/value/value_object.h"
@@ -79,8 +79,8 @@ static void ten_protocol_destroy(ten_protocol_t *self) {
   TEN_ASSERT(self->is_closed,
              "Protocol should be closed first before been destroyed.");
 
-  self->addon_host->addon->on_destroy_instance(self->addon_host->addon,
-                                               self->addon_host->ten_env, self);
+  self->addon_host->addon->on_destroy_instance(
+      self->addon_host->addon, self->addon_host->ten_env, self, NULL);
 }
 
 static void ten_protocol_on_end_of_life(TEN_UNUSED ten_ref_t *ref,
@@ -107,8 +107,6 @@ void ten_protocol_init(ten_protocol_t *self, const char *name,
 
   ten_signature_set(&self->signature, (ten_signature_t)TEN_PROTOCOL_SIGNATURE);
 
-  ten_closeable_init(&self->closeable, offsetof(ten_protocol_t, closeable));
-
   ten_sanitizer_thread_check_init_with_current_thread(&self->thread_check);
 
   self->addon_host = NULL;
@@ -120,10 +118,7 @@ void ten_protocol_init(ten_protocol_t *self, const char *name,
   self->on_output = on_output;
 
   self->listen = listen;
-  self->on_accepted = NULL;
-
   self->connect_to = connect_to;
-  self->on_connected = NULL;
 
   self->migrate = migrate;
   self->on_migrated = NULL;
@@ -148,8 +143,6 @@ void ten_protocol_init(ten_protocol_t *self, const char *name,
 
   self->role = TEN_PROTOCOL_ROLE_INVALID;
 
-  self->context_store = NULL;
-
   ten_list_init(&self->in_msgs);
   ten_list_init(&self->out_msgs);
 
@@ -166,8 +159,6 @@ void ten_protocol_deinit(ten_protocol_t *self) {
              "Should not happen.");
 
   ten_signature_set(&self->signature, 0);
-
-  ten_closeable_deinit(&self->closeable);
 
   self->attach_to = TEN_PROTOCOL_ATTACH_TO_INVALID;
   self->attached_target.app = NULL;
@@ -192,11 +183,14 @@ void ten_protocol_deinit(ten_protocol_t *self) {
   ten_sanitizer_thread_check_deinit(&self->thread_check);
 }
 
-void ten_protocol_listen(ten_protocol_t *self, const char *uri,
-                         ten_protocol_on_accepted_func_t on_accepted) {
+void ten_protocol_listen(
+    ten_protocol_t *self, const char *uri,
+    ten_protocol_on_client_accepted_func_t on_client_accepted) {
   TEN_ASSERT(self && ten_protocol_check_integrity(self, true),
              "Should not happen.");
-  TEN_ASSERT(self->listen && uri && on_accepted, "Should not happen.");
+  TEN_ASSERT(ten_protocol_role_is_listening(self),
+             "Only the listening protocol could listen.");
+  TEN_ASSERT(self->listen && uri && on_client_accepted, "Should not happen.");
 
   TEN_ASSERT(self->attach_to == TEN_PROTOCOL_ATTACH_TO_APP,
              "Should not happen.");
@@ -205,12 +199,7 @@ void ten_protocol_listen(ten_protocol_t *self, const char *uri,
   TEN_ASSERT(app && ten_app_check_integrity(app, true),
              "Access across threads.");
 
-  self->context_store = ten_app_get_protocol_context_store(app);
-  TEN_ASSERT(self->context_store,
-             "The protocol context store in app is not ready.");
-
-  self->on_accepted = on_accepted;
-  self->listen(self, uri);
+  self->listen(self, uri, on_client_accepted);
 }
 
 bool ten_protocol_cascade_close_upward(ten_protocol_t *self) {
@@ -355,42 +344,15 @@ void ten_protocol_send_msg(ten_protocol_t *self, ten_shared_ptr_t *msg) {
   }
 }
 
-static ten_protocol_context_store_t *
-ten_protocol_get_context_store_in_connect_to(ten_protocol_t *self) {
-  TEN_ASSERT(self && ten_protocol_check_integrity(self, true),
-             "Access across threads.");
-  TEN_ASSERT(self->attach_to == TEN_PROTOCOL_ATTACH_TO_CONNECTION,
-             "Invalid argument.");
-
-  ten_connection_t *connection = self->attached_target.connection;
-  TEN_ASSERT(ten_connection_check_integrity(connection, true),
-             "Invalid argument.");
-  TEN_ASSERT(
-      ten_connection_attach_to(connection) == TEN_CONNECTION_ATTACH_TO_REMOTE,
-      "connection should attach to remote.");
-
-  ten_remote_t *remote = connection->attached_target.remote;
-  TEN_ASSERT(remote && ten_remote_check_integrity(remote, true),
-             "Access across threads.");
-
-  ten_engine_t *engine = remote->engine;
-  TEN_ASSERT(engine && ten_engine_check_integrity(engine, true),
-             "Access across threads.");
-
-  ten_app_t *app = engine->app;
-
-  // TEN_NOLINTNEXTLINE(thread-check)
-  // thread-check: The engine and app thread maybe different.
-  TEN_ASSERT(app && ten_app_check_integrity(app, false), "Invalid argument.");
-
-  return ten_app_get_protocol_context_store(app);
-}
-
-bool ten_protocol_connect_to(ten_protocol_t *self, const char *uri,
-                             ten_protocol_on_connected_func_t on_connected) {
+void ten_protocol_connect_to(
+    ten_protocol_t *self, const char *uri,
+    ten_protocol_on_server_connected_func_t on_server_connected) {
   TEN_ASSERT(self && ten_protocol_check_integrity(self, true),
              "Should not happen.");
+  TEN_ASSERT(ten_protocol_role_is_communication(self),
+             "Only the communication protocol could connect to remote.");
   TEN_ASSERT(uri, "Should not happen.");
+  TEN_ASSERT(on_server_connected, "Should not happen.");
 
   if (self->attach_to == TEN_PROTOCOL_ATTACH_TO_CONNECTION &&
       ten_connection_attach_to(self->attached_target.connection) ==
@@ -402,15 +364,13 @@ bool ten_protocol_connect_to(ten_protocol_t *self, const char *uri,
         "Should not happen.");
   }
 
-  self->context_store = ten_protocol_get_context_store_in_connect_to(self);
-  TEN_ASSERT(self->context_store,
-             "The protocol context store is not ready in 'connect_to'.");
-
-  self->on_connected = on_connected;
   if (self->connect_to) {
-    return self->connect_to(self, uri);
+    self->connect_to(self, uri, on_server_connected);
+  } else {
+    // The protocol doesn't implement the 'connect_to' function, so the
+    // 'on_server_connected' callback is called directly.
+    on_server_connected(self, false);
   }
-  return false;
 }
 
 void ten_protocol_migrate(ten_protocol_t *self, ten_engine_t *engine,
@@ -458,42 +418,6 @@ void ten_protocol_update_belonging_thread_on_cleaned(ten_protocol_t *self) {
       &self->thread_check);
   TEN_ASSERT(ten_protocol_check_integrity(self, true),
              "Access across threads.");
-
-  ten_sanitizer_thread_check_set_belonging_thread_to_current_thread(
-      &self->closeable.thread_check);
-}
-
-ten_protocol_t *ten_protocol_create(const char *uri, TEN_PROTOCOL_ROLE role) {
-  TEN_ASSERT(uri && role > TEN_PROTOCOL_ROLE_INVALID, "Should not happen.");
-
-  ten_protocol_t *protocol = NULL;
-  ten_string_t *protocol_str = ten_uri_get_protocol(uri);
-
-  ten_addon_host_t *addon_host =
-      ten_addon_protocol_find(ten_string_get_raw_str(protocol_str));
-  if (!addon_host) {
-    TEN_LOGE("Can not handle protocol '%s' because no addon installed for it",
-             uri);
-    goto done;
-  }
-
-  TEN_LOGD("Loading protocol addon: %s",
-           ten_string_get_raw_str(&addon_host->name));
-
-  protocol = ten_addon_create_instance(
-      addon_host->ten_env, ten_string_get_raw_str(&addon_host->name),
-      ten_string_get_raw_str(&addon_host->name), TEN_ADDON_TYPE_PROTOCOL);
-  TEN_ASSERT(protocol, "Should not happen.");
-
-  ten_protocol_determine_default_property_value(protocol);
-  ten_env_on_create_instance_done(addon_host->ten_env, protocol, NULL, NULL);
-
-  ten_string_set_formatted(&protocol->uri, "%s", uri);
-  protocol->role = role;
-
-done:
-  ten_string_destroy(protocol_str);
-  return protocol;
 }
 
 void ten_protocol_set_addon(ten_protocol_t *self,
@@ -565,14 +489,6 @@ ten_runloop_t *ten_protocol_get_attached_runloop(ten_protocol_t *self) {
   return NULL;
 }
 
-ten_protocol_context_store_t *ten_protocol_get_context_store(
-    ten_protocol_t *self) {
-  TEN_ASSERT(self && ten_protocol_check_integrity(self, true),
-             "Access across threads.");
-
-  return self->context_store;
-}
-
 void ten_protocol_set_uri(ten_protocol_t *self, ten_string_t *uri) {
   TEN_ASSERT(self && uri, "Invalid argument.");
   TEN_ASSERT(ten_protocol_check_integrity(self, true),
@@ -586,4 +502,11 @@ bool ten_protocol_role_is_communication(ten_protocol_t *self) {
              "Access across threads.");
 
   return self->role > TEN_PROTOCOL_ROLE_LISTEN;
+}
+
+bool ten_protocol_role_is_listening(ten_protocol_t *self) {
+  TEN_ASSERT(self && ten_protocol_check_integrity(self, true),
+             "Access across threads.");
+
+  return self->role == TEN_PROTOCOL_ROLE_LISTEN;
 }

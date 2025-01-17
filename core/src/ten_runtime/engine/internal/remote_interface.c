@@ -8,6 +8,7 @@
 
 #include <stdlib.h>
 
+#include "include_internal/ten_runtime/addon/protocol/protocol.h"
 #include "include_internal/ten_runtime/app/app.h"
 #include "include_internal/ten_runtime/common/loc.h"
 #include "include_internal/ten_runtime/connection/connection.h"
@@ -20,17 +21,20 @@
 #include "include_internal/ten_runtime/msg/msg.h"
 #include "include_internal/ten_runtime/protocol/protocol.h"
 #include "include_internal/ten_runtime/remote/remote.h"
+#include "include_internal/ten_runtime/ten_env/ten_env.h"
 #include "ten_runtime/app/app.h"
 #include "ten_runtime/common/status_code.h"
 #include "ten_runtime/msg/cmd_result/cmd_result.h"
 #include "ten_utils/container/list_node.h"
 #include "ten_utils/container/list_node_ptr.h"
 #include "ten_utils/container/list_ptr.h"
+#include "ten_utils/lib/error.h"
 #include "ten_utils/lib/smart_ptr.h"
 #include "ten_utils/lib/string.h"
 #include "ten_utils/macro/check.h"
 #include "ten_utils/macro/field.h"
 #include "ten_utils/macro/mark.h"
+#include "ten_utils/macro/memory.h"
 
 static bool ten_engine_del_weak_remote(ten_engine_t *self,
                                        ten_remote_t *remote) {
@@ -64,6 +68,26 @@ static size_t ten_engine_weak_remotes_cnt_in_specified_uri(ten_engine_t *self,
   return cnt;
 }
 
+static ten_engine_on_protocol_created_info_t *
+ten_engine_on_protocol_created_info_create(ten_engine_on_remote_created_cb_t cb,
+                                           void *user_data) {
+  ten_engine_on_protocol_created_info_t *self =
+      (ten_engine_on_protocol_created_info_t *)TEN_MALLOC(
+          sizeof(ten_engine_on_protocol_created_info_t));
+
+  self->cb = cb;
+  self->user_data = user_data;
+
+  return self;
+}
+
+static void ten_engine_on_protocol_created_info_destroy(
+    ten_engine_on_protocol_created_info_t *self) {
+  TEN_ASSERT(self, "Invalid argument.");
+
+  TEN_FREE(self);
+}
+
 void ten_engine_on_remote_closed(ten_remote_t *remote, void *on_closed_data) {
   TEN_ASSERT(remote && on_closed_data, "Should not happen.");
 
@@ -82,11 +106,36 @@ void ten_engine_on_remote_closed(ten_remote_t *remote, void *on_closed_data) {
     // the closing of the engine. Therefore, we just destroy the remote.
     ten_remote_destroy(remote);
   } else {
-    ten_hashhandle_t *hh = ten_hashtable_find_string(
-        &self->remotes, ten_string_get_raw_str(&remote->uri));
-    TEN_ASSERT(hh, "Should not happen.");
+    bool found_in_remotes = false;
 
-    ten_hashtable_del(&self->remotes, hh);
+    ten_hashhandle_t *connected_remote_hh = ten_hashtable_find_string(
+        &self->remotes, ten_string_get_raw_str(&remote->uri));
+    if (connected_remote_hh) {
+      ten_remote_t *connected_remote = CONTAINER_OF_FROM_FIELD(
+          connected_remote_hh, ten_remote_t, hh_in_remote_table);
+      TEN_ASSERT(connected_remote, "Invalid argument.");
+      TEN_ASSERT(ten_remote_check_integrity(connected_remote, true),
+                 "Invalid use of remote %p.", connected_remote);
+
+      if (connected_remote == remote) {
+        found_in_remotes = true;
+
+        // The remote is in the 'remotes' list, we just remove it.
+        ten_hashtable_del(&self->remotes, connected_remote_hh);
+      } else {
+        // Search the engine's remotes using the URI and find that there is
+        // already another remote instance present. This situation can occur in
+        // the case of a duplicated remote.
+      }
+    }
+
+    if (!found_in_remotes) {
+      TEN_LOGI("The remote %p is not found in the 'remotes' list.", remote);
+
+      // The remote is not in the 'remotes' list, we just destroy it.
+      ten_remote_destroy(remote);
+      return;
+    }
   }
 
   if (ten_engine_is_closing(self)) {
@@ -101,7 +150,7 @@ void ten_engine_on_remote_closed(ten_remote_t *remote, void *on_closed_data) {
   }
 }
 
-void ten_engine_add_remote(ten_engine_t *self, ten_remote_t *remote) {
+static void ten_engine_add_remote(ten_engine_t *self, ten_remote_t *remote) {
   TEN_ASSERT(self, "Invalid argument.");
   TEN_ASSERT(ten_engine_check_integrity(self, true),
              "Invalid use of engine %p.", self);
@@ -110,8 +159,7 @@ void ten_engine_add_remote(ten_engine_t *self, ten_remote_t *remote) {
   TEN_ASSERT(ten_remote_check_integrity(remote, true),
              "Invalid use of remote %p.", remote);
 
-  TEN_LOGD("[%s] Add %s (%p) as remote.",
-           ten_string_get_raw_str(ten_app_get_uri(self->app)),
+  TEN_LOGD("[%s] Add %s (%p) as remote.", ten_app_get_uri(self->app),
            ten_string_get_raw_str(&remote->uri), remote);
 
   ten_hashtable_add_string(&self->remotes, &remote->hh_in_remote_table,
@@ -119,7 +167,8 @@ void ten_engine_add_remote(ten_engine_t *self, ten_remote_t *remote) {
                            ten_remote_destroy);
 }
 
-void ten_engine_add_weak_remote(ten_engine_t *self, ten_remote_t *remote) {
+static void ten_engine_add_weak_remote(ten_engine_t *self,
+                                       ten_remote_t *remote) {
   TEN_ASSERT(self, "Invalid argument.");
   TEN_ASSERT(ten_engine_check_integrity(self, true),
              "Invalid use of engine %p.", self);
@@ -128,8 +177,7 @@ void ten_engine_add_weak_remote(ten_engine_t *self, ten_remote_t *remote) {
   TEN_ASSERT(ten_remote_check_integrity(remote, true),
              "Invalid use of remote %p.", remote);
 
-  TEN_LOGD("[%s] Add %s (%p) as weak remote.",
-           ten_string_get_raw_str(ten_app_get_uri(self->app)),
+  TEN_LOGD("[%s] Add %s (%p) as weak remote.", ten_app_get_uri(self->app),
            ten_string_get_raw_str(&remote->uri), remote);
 
   TEN_UNUSED ten_listnode_t *found = ten_list_find_ptr_custom(
@@ -158,28 +206,20 @@ void ten_engine_upgrade_weak_remote_to_normal_remote(ten_engine_t *self,
   ten_engine_add_remote(self, remote);
 }
 
-// According to the uri of the remote, create the necessary 'protocol' and
-// 'connection' for the remote.
-static ten_connection_t *ten_engine_create_connection_for_remote(
-    ten_engine_t *self, const char *uri) {
+static ten_remote_t *ten_engine_find_remote(ten_engine_t *self,
+                                            const char *uri) {
   TEN_ASSERT(self, "Invalid argument.");
   TEN_ASSERT(ten_engine_check_integrity(self, true),
              "Invalid use of engine %p.", self);
+
   TEN_ASSERT(uri, "Should not happen.");
 
-  ten_protocol_t *protocol =
-      ten_protocol_create(uri, TEN_PROTOCOL_ROLE_OUT_DEFAULT);
-  TEN_ASSERT(protocol, "Should not happen.");
+  ten_hashhandle_t *hh = ten_hashtable_find_string(&self->remotes, uri);
+  if (hh) {
+    return CONTAINER_OF_FROM_FIELD(hh, ten_remote_t, hh_in_remote_table);
+  }
 
-  ten_connection_t *connection = ten_connection_create(protocol);
-  TEN_ASSERT(connection, "Should not happen.");
-
-  // This is in the 'connect_to' stage, the 'connection' already attaches to the
-  // engine, no migration is needed.
-  ten_connection_set_migration_state(connection,
-                                     TEN_CONNECTION_MIGRATION_STATE_DONE);
-
-  return connection;
+  return NULL;
 }
 
 void ten_engine_link_connection_to_remote(ten_engine_t *self,
@@ -196,34 +236,76 @@ void ten_engine_link_connection_to_remote(ten_engine_t *self,
   TEN_ASSERT(uri, "Invalid argument.");
 
   ten_remote_t *remote = ten_engine_find_remote(self, uri);
-  if (remote) {
-    TEN_ASSERT(
-        remote->connection == NULL,
-        "The relationship of remote and connection should be 1-1 mapping.");
+  TEN_ASSERT(
+      !remote,
+      "The relationship of remote and connection should be 1-1 mapping.");
 
-    ten_connection_attach_to_remote(connection, remote);
-  } else {
-    remote = ten_remote_create_for_engine(uri, self, connection);
-
-    ten_engine_add_remote(self, remote);
-  }
+  remote = ten_remote_create_for_engine(uri, self, connection);
+  ten_engine_add_remote(self, remote);
 }
 
-static ten_remote_t *ten_engine_create_remote(ten_engine_t *self,
-                                              const char *uri) {
+static void ten_engine_on_remote_protocol_created(ten_env_t *ten_env,
+                                                  ten_protocol_t *protocol,
+                                                  void *cb_data) {
+  TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
+             "Should not happen.");
+
+  ten_engine_t *self = ten_env_get_attached_engine(ten_env);
+  TEN_ASSERT(self && ten_engine_check_integrity(self, true),
+             "Should not happen.");
+
+  ten_engine_on_protocol_created_info_t *info =
+      (ten_engine_on_protocol_created_info_t *)cb_data;
+
+  ten_connection_t *connection = ten_connection_create(protocol);
+  TEN_ASSERT(connection, "Should not happen.");
+
+  // This is in the 'connect_to' stage, the 'connection' already attaches to the
+  // engine, no migration is needed.
+  ten_connection_set_migration_state(connection,
+                                     TEN_CONNECTION_MIGRATION_STATE_DONE);
+
+  ten_remote_t *remote = ten_remote_create_for_engine(
+      ten_string_get_raw_str(&protocol->uri), self, connection);
+  TEN_ASSERT(remote, "Should not happen.");
+
+  if (info->cb) {
+    info->cb(self, remote, info->user_data);
+  }
+
+  ten_engine_on_protocol_created_info_destroy(info);
+}
+
+static bool ten_engine_create_remote_async(
+    ten_engine_t *self, const char *uri,
+    ten_engine_on_remote_created_cb_t on_remote_created_cb, void *cb_data) {
   TEN_ASSERT(self, "Invalid argument.");
   TEN_ASSERT(ten_engine_check_integrity(self, true),
              "Invalid use of engine %p.", self);
-
+  TEN_ASSERT(on_remote_created_cb, "Invalid argument.");
   TEN_ASSERT(uri, "Should not happen.");
 
-  ten_connection_t *connection =
-      ten_engine_create_connection_for_remote(self, uri);
+  ten_error_t err;
+  ten_error_init(&err);
 
-  ten_remote_t *remote = ten_remote_create_for_engine(uri, self, connection);
-  TEN_ASSERT(remote, "Should not happen.");
+  ten_engine_on_protocol_created_info_t *info =
+      ten_engine_on_protocol_created_info_create(on_remote_created_cb, cb_data);
+  TEN_ASSERT(info, "Failed to allocate memory.");
 
-  return remote;
+  bool rc = ten_addon_create_protocol_with_uri(
+      self->ten_env, uri, TEN_PROTOCOL_ROLE_OUT_DEFAULT,
+      ten_engine_on_remote_protocol_created, info, &err);
+  if (!rc) {
+    TEN_LOGE("Failed to create protocol for %s. err: %s", uri,
+             ten_error_errmsg(&err));
+    ten_error_deinit(&err);
+    ten_engine_on_protocol_created_info_destroy(info);
+    return false;
+  }
+
+  ten_error_deinit(&err);
+
+  return true;
 }
 
 /**
@@ -279,23 +361,51 @@ static void ten_engine_on_graph_remote_connect_error(ten_remote_t *self,
   }
 }
 
-void ten_engine_connect_to_graph_remote(ten_engine_t *self, const char *uri,
-                                        ten_shared_ptr_t *cmd) {
-  TEN_ASSERT(self, "Invalid argument.");
-  TEN_ASSERT(ten_engine_check_integrity(self, true),
-             "Invalid use of engine %p.", self);
+static void ten_engine_connect_to_remote_after_remote_is_created(
+    ten_engine_t *engine, ten_remote_t *remote, void *user_data) {
+  TEN_ASSERT(engine && ten_engine_check_integrity(engine, true),
+             "Invalid argument.");
 
-  TEN_ASSERT(uri, "Invalid argument.");
+  ten_shared_ptr_t *start_graph_cmd = (ten_shared_ptr_t *)user_data;
+  TEN_ASSERT(start_graph_cmd && ten_msg_check_integrity(start_graph_cmd),
+             "Invalid argument.");
 
-  TEN_ASSERT(cmd && ten_msg_get_type(cmd) == TEN_MSG_TYPE_CMD_START_GRAPH,
-             "Should not happen.");
+  if (!remote) {
+    if (engine->original_start_graph_cmd_of_enabling_engine) {
+      ten_engine_return_error_for_cmd_start_graph(
+          engine, engine->original_start_graph_cmd_of_enabling_engine,
+          "Failed to create remote for %s",
+          ten_msg_get_first_dest_uri(start_graph_cmd));
 
-  TEN_LOGD("Trying to connect to %s inside graph.", uri);
+      ten_shared_ptr_destroy(start_graph_cmd);
+    }
+    return;
+  }
 
-  ten_remote_t *remote = ten_engine_create_remote(self, uri);
-  TEN_ASSERT(remote, "Invalid argument.");
-  TEN_ASSERT(ten_remote_check_integrity(remote, true),
+  TEN_ASSERT(remote && ten_remote_check_integrity(remote, true),
              "Invalid use of remote %p.", remote);
+
+  if (ten_engine_check_remote_is_duplicated(
+          engine, ten_string_get_raw_str(&remote->uri))) {
+    // Since the remote_t creation is asynchronous, the engine may have already
+    // established a new connection with the remote during the creation process.
+    // If it is found that a connection is about to be duplicated, the remote_t
+    // object can be directly destroyed as the physical connection has not
+    // actually been established yet.
+    // Additionally, there is no need to send the 'start_graph' command to the
+    // remote, as the graph must have already been started on the remote side.
+    TEN_LOGD("Destroy remote %p for %s because it's duplicated.", remote,
+             ten_string_get_raw_str(&remote->uri));
+
+    if (engine->original_start_graph_cmd_of_enabling_engine) {
+      ten_engine_return_ok_for_cmd_start_graph(
+          engine, engine->original_start_graph_cmd_of_enabling_engine);
+    }
+
+    ten_remote_close(remote);
+    ten_shared_ptr_destroy(start_graph_cmd);
+    return;
+  }
 
   // This channel might be duplicated with other channels between this TEN app
   // and the remote TEN app. This situation may appear in a graph which
@@ -308,10 +418,28 @@ void ten_engine_connect_to_graph_remote(ten_engine_t *self, const char *uri,
   // If it's this case, this 'channel' would be destroyed later, so we put
   // this 'channel' (i.e., the 'remote' here) to a tmp list (weak remotes)
   // first to prevent any messages from flowing through this channel.
-  ten_engine_add_weak_remote(self, remote);
+  ten_engine_add_weak_remote(engine, remote);
 
-  ten_remote_connect_to(remote, ten_engine_on_graph_remote_connected, cmd,
+  ten_remote_connect_to(remote, ten_engine_on_graph_remote_connected,
+                        start_graph_cmd,
                         ten_engine_on_graph_remote_connect_error);
+
+  ten_shared_ptr_destroy(start_graph_cmd);
+}
+
+bool ten_engine_connect_to_graph_remote(ten_engine_t *self, const char *uri,
+                                        ten_shared_ptr_t *cmd) {
+  TEN_ASSERT(self, "Invalid argument.");
+  TEN_ASSERT(ten_engine_check_integrity(self, true),
+             "Invalid use of engine %p.", self);
+  TEN_ASSERT(uri, "Invalid argument.");
+  TEN_ASSERT(cmd && ten_msg_get_type(cmd) == TEN_MSG_TYPE_CMD_START_GRAPH,
+             "Should not happen.");
+
+  TEN_LOGD("Trying to connect to %s inside graph.", uri);
+
+  return ten_engine_create_remote_async(
+      self, uri, ten_engine_connect_to_remote_after_remote_is_created, cmd);
 }
 
 void ten_engine_route_msg_to_remote(ten_engine_t *self, ten_shared_ptr_t *msg) {
@@ -352,10 +480,9 @@ ten_remote_t *ten_engine_check_remote_is_existed(ten_engine_t *self,
 #if defined(_DEBUG)
     size_t weak_remote_cnt = ten_list_find_ptr_cnt_custom(
         &self->weak_remotes, uri, ten_remote_is_uri_equal_to);
-    TEN_ASSERT(
-        weak_remote_cnt <= 1,
-        "A remote might appear in 'remote' and 'weak_remote' once when the "
-        "graph contains a loop. This is the case of 'duplicate' connection.");
+    // A remote might appear in 'remote' and 'weak_remote' once when the graph
+    // contains a loop. This is the case of 'duplicate' connection.
+    TEN_ASSERT(weak_remote_cnt <= 1, "Invalid numbers of weak remotes");
 #endif
 
     remote = CONTAINER_OF_FROM_FIELD(hh, ten_remote_t, hh_in_remote_table);
@@ -388,7 +515,7 @@ ten_remote_t *ten_engine_check_remote_is_existed(ten_engine_t *self,
 // This function is used to solve the connection duplication problem. If there
 // are two physical connections between two TEN apps, the connection which
 // connects a TEN app with a smaller URI to a TEN app with a larger URI would be
-// keep, and the other connection would be dropped.
+// kept, and the other connection would be dropped.
 //
 //                   ------->
 //  ----> TEN app 1            TEN app 2 <----
@@ -405,8 +532,7 @@ bool ten_engine_check_remote_is_duplicated(ten_engine_t *self,
   if (remote) {
     TEN_LOGW("Found a remote %s (%p), checking duplication...", uri, remote);
 
-    if (ten_c_string_is_equal_or_smaller(
-            uri, ten_string_get_raw_str(ten_app_get_uri(self->app)))) {
+    if (ten_c_string_is_equal_or_smaller(uri, ten_app_get_uri(self->app))) {
       TEN_LOGW(" > Remote %s (%p) is smaller, this channel is duplicated.", uri,
                remote);
       return true;
@@ -495,19 +621,4 @@ bool ten_engine_receive_msg_from_remote(ten_remote_t *remote,
   }
 
   return true;
-}
-
-ten_remote_t *ten_engine_find_remote(ten_engine_t *self, const char *uri) {
-  TEN_ASSERT(self, "Invalid argument.");
-  TEN_ASSERT(ten_engine_check_integrity(self, true),
-             "Invalid use of engine %p.", self);
-
-  TEN_ASSERT(uri, "Should not happen.");
-
-  ten_hashhandle_t *hh = ten_hashtable_find_string(&self->remotes, uri);
-  if (hh) {
-    return CONTAINER_OF_FROM_FIELD(hh, ten_remote_t, hh_in_remote_table);
-  }
-
-  return NULL;
 }

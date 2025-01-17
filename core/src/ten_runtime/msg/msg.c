@@ -17,6 +17,7 @@
 #include "include_internal/ten_runtime/extension/extension_info/extension_info.h"
 #include "include_internal/ten_runtime/extension_context/extension_context.h"
 #include "include_internal/ten_runtime/extension_group/extension_group.h"
+#include "include_internal/ten_runtime/extension_group/on_xxx.h"
 #include "include_internal/ten_runtime/extension_store/extension_store.h"
 #include "include_internal/ten_runtime/extension_thread/extension_thread.h"
 #include "include_internal/ten_runtime/msg/cmd_base/cmd_base.h"
@@ -26,12 +27,10 @@
 #include "include_internal/ten_utils/value/value_path.h"
 #include "ten_runtime/app/app.h"
 #include "ten_runtime/common/errno.h"
-#include "ten_runtime/msg/audio_frame/audio_frame.h"
 #include "ten_runtime/msg/cmd/close_app/cmd.h"
+#include "ten_runtime/msg/cmd/stop_graph/cmd.h"
 #include "ten_runtime/msg/cmd_result/cmd_result.h"
-#include "ten_runtime/msg/data/data.h"
 #include "ten_runtime/msg/msg.h"
-#include "ten_runtime/msg/video_frame/video_frame.h"
 #include "ten_runtime/ten_env/ten_env.h"
 #include "ten_utils/container/list.h"
 #include "ten_utils/lib/error.h"
@@ -41,6 +40,10 @@
 #include "ten_utils/macro/check.h"
 #include "ten_utils/macro/memory.h"
 #include "ten_utils/value/value.h"
+#include "ten_utils/value/value_get.h"
+#include "ten_utils/value/value_is.h"
+#include "ten_utils/value/value_json.h"
+#include "ten_utils/value/value_kv.h"
 
 // Raw msg interface
 bool ten_raw_msg_check_integrity(ten_msg_t *self) {
@@ -59,7 +62,7 @@ void ten_raw_msg_init(ten_msg_t *self, TEN_MSG_TYPE type) {
   ten_signature_set(&self->signature, (ten_signature_t)TEN_MSG_SIGNATURE);
 
   self->type = type;
-  ten_string_init(&self->name);
+  ten_value_init_string(&self->name);
 
   ten_loc_init_empty(&self->src_loc);
   ten_list_init(&self->dest_loc);
@@ -75,7 +78,7 @@ void ten_raw_msg_deinit(ten_msg_t *self) {
   TEN_LOGV("Destroy c_msg %p", self);
 
   ten_signature_set(&self->signature, 0);
-  ten_string_deinit(&self->name);
+  ten_value_deinit(&self->name);
 
   ten_loc_deinit(&self->src_loc);
   ten_list_clear(&self->dest_loc);
@@ -87,7 +90,7 @@ void ten_raw_msg_deinit(ten_msg_t *self) {
 
 void ten_raw_msg_set_src_to_loc(ten_msg_t *self, ten_loc_t *loc) {
   TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
-  ten_loc_init_from_loc(&self->src_loc, loc);
+  ten_loc_set_from_loc(&self->src_loc, loc);
 }
 
 void ten_msg_set_src_to_loc(ten_shared_ptr_t *self, ten_loc_t *loc) {
@@ -98,7 +101,7 @@ void ten_msg_set_src_to_loc(ten_shared_ptr_t *self, ten_loc_t *loc) {
 // The semantics of the following function is to replace the destination
 // information to one which is specified through the parameters.
 static bool ten_raw_msg_clear_and_set_dest(ten_msg_t *self, const char *uri,
-                                           const char *graph_name,
+                                           const char *graph_id,
                                            const char *extension_group_name,
                                            const char *extension_name,
                                            TEN_UNUSED ten_error_t *err) {
@@ -109,21 +112,21 @@ static bool ten_raw_msg_clear_and_set_dest(ten_msg_t *self, const char *uri,
   ten_list_clear(&self->dest_loc);
   ten_list_push_ptr_back(
       &self->dest_loc,
-      ten_loc_create(uri, graph_name, extension_group_name, extension_name),
+      ten_loc_create(uri, graph_id, extension_group_name, extension_name),
       (ten_ptr_listnode_destroy_func_t)ten_loc_destroy);
 
   return true;
 }
 
 void ten_raw_msg_add_dest(ten_msg_t *self, const char *uri,
-                          const char *graph_name,
+                          const char *graph_id,
                           const char *extension_group_name,
                           const char *extension_name) {
   TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
 
   ten_list_push_ptr_back(
       &self->dest_loc,
-      ten_loc_create(uri, graph_name, extension_group_name, extension_name),
+      ten_loc_create(uri, graph_id, extension_group_name, extension_name),
       (ten_ptr_listnode_destroy_func_t)ten_loc_destroy);
 }
 
@@ -141,7 +144,7 @@ static void ten_raw_msg_clear_and_set_dest_from_msg_src(ten_msg_t *self,
 
   ten_raw_msg_clear_and_set_dest(
       self, ten_string_get_raw_str(&raw_msg->src_loc.app_uri),
-      ten_string_get_raw_str(&raw_msg->src_loc.graph_name),
+      ten_string_get_raw_str(&raw_msg->src_loc.graph_id),
       ten_string_get_raw_str(&raw_msg->src_loc.extension_group_name),
       ten_string_get_raw_str(&raw_msg->src_loc.extension_name), NULL);
 }
@@ -196,20 +199,19 @@ const char *ten_msg_get_first_dest_uri(ten_shared_ptr_t *self) {
   return ten_raw_msg_get_first_dest_uri(ten_msg_get_raw_msg(self));
 }
 
-void ten_raw_msg_set_src(ten_msg_t *self, const char *uri,
-                         const char *graph_name,
+void ten_raw_msg_set_src(ten_msg_t *self, const char *uri, const char *graph_id,
                          const char *extension_group_name,
                          const char *extension_name) {
   TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
-  ten_loc_set(&self->src_loc, uri, graph_name, extension_group_name,
+  ten_loc_set(&self->src_loc, uri, graph_id, extension_group_name,
               extension_name);
 }
 
 void ten_msg_set_src(ten_shared_ptr_t *self, const char *uri,
-                     const char *graph_name, const char *extension_group_name,
+                     const char *graph_id, const char *extension_group_name,
                      const char *extension_name) {
   TEN_ASSERT(self && ten_msg_check_integrity(self), "Should not happen.");
-  ten_raw_msg_set_src(ten_msg_get_raw_msg(self), uri, graph_name,
+  ten_raw_msg_set_src(ten_msg_get_raw_msg(self), uri, graph_id,
                       extension_group_name, extension_name);
 }
 
@@ -217,8 +219,7 @@ void ten_msg_set_src_to_app(ten_shared_ptr_t *self, ten_app_t *app) {
   TEN_ASSERT(self && ten_msg_check_integrity(self), "Should not happen.");
   TEN_ASSERT(app && ten_app_check_integrity(app, false), "Should not happen.");
 
-  ten_msg_set_src(self, ten_string_get_raw_str(ten_app_get_uri(app)), NULL,
-                  NULL, NULL);
+  ten_msg_set_src(self, ten_app_get_uri(app), NULL, NULL, NULL);
 }
 
 void ten_msg_set_src_to_engine(ten_shared_ptr_t *self, ten_engine_t *engine) {
@@ -226,8 +227,8 @@ void ten_msg_set_src_to_engine(ten_shared_ptr_t *self, ten_engine_t *engine) {
   TEN_ASSERT(engine && ten_engine_check_integrity(engine, false),
              "Should not happen.");
 
-  ten_msg_set_src(self, ten_string_get_raw_str(ten_app_get_uri(engine->app)),
-                  ten_string_get_raw_str(&engine->graph_name), NULL, NULL);
+  ten_msg_set_src(self, ten_app_get_uri(engine->app),
+                  ten_engine_get_id(engine, true), NULL, NULL);
 }
 
 void ten_msg_set_src_to_extension(ten_shared_ptr_t *self,
@@ -256,10 +257,10 @@ void ten_msg_set_src_to_extension(ten_shared_ptr_t *self,
   TEN_ASSERT(engine && ten_engine_check_integrity(engine, false),
              "Should not happen.");
 
-  ten_msg_set_src(self, ten_string_get_raw_str(ten_app_get_uri(engine->app)),
-                  ten_string_get_raw_str(&engine->graph_name),
-                  ten_string_get_raw_str(&extension_group->name),
-                  ten_string_get_raw_str(&extension->name));
+  ten_msg_set_src(self, ten_app_get_uri(engine->app),
+                  ten_engine_get_id(engine, false),
+                  ten_extension_group_get_name(extension_group, true),
+                  ten_extension_get_name(extension, true));
 }
 
 void ten_msg_set_src_to_extension_group(
@@ -274,9 +275,9 @@ void ten_msg_set_src_to_extension_group(
   TEN_ASSERT(engine && ten_engine_check_integrity(engine, false),
              "Should not happen.");
 
-  ten_msg_set_src(self, ten_string_get_raw_str(ten_app_get_uri(engine->app)),
-                  ten_string_get_raw_str(&engine->graph_name),
-                  ten_string_get_raw_str(&extension_group->name), NULL);
+  ten_msg_set_src(self, ten_app_get_uri(engine->app),
+                  ten_engine_get_id(engine, true),
+                  ten_extension_group_get_name(extension_group, true), NULL);
 }
 
 bool ten_msg_src_uri_is_empty(ten_shared_ptr_t *self) {
@@ -284,9 +285,9 @@ bool ten_msg_src_uri_is_empty(ten_shared_ptr_t *self) {
   return strlen(ten_msg_get_src_app_uri(self)) == 0;
 }
 
-bool ten_msg_src_graph_name_is_empty(ten_shared_ptr_t *self) {
+bool ten_msg_src_graph_id_is_empty(ten_shared_ptr_t *self) {
   TEN_ASSERT(self && ten_msg_check_integrity(self), "Should not happen.");
-  return strlen(ten_msg_get_src_graph_name(self)) == 0;
+  return strlen(ten_msg_get_src_graph_id(self)) == 0;
 }
 
 void ten_msg_set_src_uri(ten_shared_ptr_t *self, const char *uri) {
@@ -310,20 +311,20 @@ void ten_msg_set_src_engine_if_unspecified(ten_shared_ptr_t *self,
   TEN_ASSERT(engine && ten_engine_check_integrity(engine, true),
              "Invalid argument.");
 
-  if (ten_msg_src_graph_name_is_empty(self)) {
-    ten_string_copy(&(ten_msg_get_raw_msg(self)->src_loc.graph_name),
-                    &engine->graph_name);
+  if (ten_msg_src_graph_id_is_empty(self)) {
+    ten_string_copy(&(ten_msg_get_raw_msg(self)->src_loc.graph_id),
+                    &engine->graph_id);
   }
 }
 
 bool ten_msg_clear_and_set_dest(ten_shared_ptr_t *self, const char *uri,
-                                const char *graph_name,
+                                const char *graph_id,
                                 const char *extension_group_name,
                                 const char *extension_name, ten_error_t *err) {
   TEN_ASSERT(self && ten_msg_check_integrity(self), "Should not happen.");
 
   return ten_raw_msg_clear_and_set_dest(ten_msg_get_raw_msg(self), uri,
-                                        graph_name, extension_group_name,
+                                        graph_id, extension_group_name,
                                         extension_name, err);
 }
 
@@ -336,7 +337,7 @@ void ten_raw_msg_clear_and_set_dest_to_loc(ten_msg_t *self, ten_loc_t *loc) {
   } else {
     ten_raw_msg_clear_and_set_dest(
         self, ten_string_get_raw_str(&loc->app_uri),
-        ten_string_get_raw_str(&loc->graph_name),
+        ten_string_get_raw_str(&loc->graph_id),
         ten_string_get_raw_str(&loc->extension_group_name),
         ten_string_get_raw_str(&loc->extension_name), NULL);
   }
@@ -349,83 +350,51 @@ void ten_msg_clear_and_set_dest_to_loc(ten_shared_ptr_t *self, ten_loc_t *loc) {
   ten_raw_msg_clear_and_set_dest_to_loc(ten_shared_ptr_get_data(self), loc);
 }
 
-static void ten_msg_clear_dest_graph_name(ten_shared_ptr_t *self) {
+static void ten_msg_clear_dest_graph_id(ten_shared_ptr_t *self) {
   TEN_ASSERT(self && ten_msg_check_integrity(self), "Should not happen.");
 
   ten_list_foreach (ten_msg_get_dest(self), iter) {
     ten_loc_t *loc = ten_ptr_listnode_get(iter.node);
     TEN_ASSERT(loc && ten_loc_check_integrity(loc), "Should not happen.");
 
-    ten_string_clear(&loc->graph_name);
+    ten_string_clear(&loc->graph_id);
   }
 }
 
 void ten_msg_set_dest_engine_if_unspecified_or_predefined_graph_name(
     ten_shared_ptr_t *self, ten_engine_t *engine,
     ten_list_t *predefined_graph_infos) {
-  TEN_ASSERT(self && ten_msg_check_integrity(self) && engine,
-             "Should not happen.");
+  TEN_ASSERT(self && ten_msg_check_integrity(self), "Should not happen.");
+  TEN_ASSERT(engine, "Should not happen.");
 
   ten_list_foreach (ten_msg_get_dest(self), iter) {
-    ten_loc_t *loc = ten_ptr_listnode_get(iter.node);
-    TEN_ASSERT(loc && ten_loc_check_integrity(loc), "Should not happen.");
+    ten_loc_t *dest_loc = ten_ptr_listnode_get(iter.node);
+    TEN_ASSERT(dest_loc && ten_loc_check_integrity(dest_loc),
+               "Should not happen.");
 
-    if (ten_string_is_empty(&loc->graph_name)) {
-      ten_string_copy(&loc->graph_name, &engine->graph_name);
+    if (ten_string_is_empty(&dest_loc->graph_id)) {
+      ten_string_copy(&dest_loc->graph_id, &engine->graph_id);
     } else if (predefined_graph_infos) {
-      // Otherwise, if the target_engine is one of the predefined graph engine,
-      // and the destination graph_name is the "name" of that predefined graph
-      // engine, then replace the destination graph_name to the "graph_name" of
-      // the predefined graph engine.
+      // Otherwise, if the target_engine is one of the _singleton_ predefined
+      // graph engine, and the destination graph_id is the "name" of that
+      // _singleton_ predefined graph engine, then replace the destination
+      // graph_id to the "graph_name" of the _singleton_ predefined graph
+      // engine.
 
-      ten_list_foreach (predefined_graph_infos, iter) {
-        ten_predefined_graph_info_t *predefined_graph_info =
-            (ten_predefined_graph_info_t *)ten_ptr_listnode_get(iter.node);
+      ten_predefined_graph_info_t *singleton_predefined_graph =
+          ten_predefined_graph_infos_get_singleton_by_name(
+              predefined_graph_infos,
+              ten_string_get_raw_str(&dest_loc->graph_id));
+      if (singleton_predefined_graph && singleton_predefined_graph->engine) {
+        TEN_ASSERT(engine == singleton_predefined_graph->engine,
+                   "Otherwise, the message should not be transferred to this "
+                   "engine.");
 
-        // If the 'graph_name' is the name of one of the predefined graph
-        // engine, we replace it to the graph_name of the predefined graph
-        // engine.
-        if (ten_string_is_equal(&loc->graph_name,
-                                &predefined_graph_info->name)) {
-          // If the predefined graph engine is not started yet, this command
-          // will trigger the start of the predefined graph engine.
-          if (predefined_graph_info->engine == NULL) {
-            break;
-          }
-
-          TEN_ASSERT(engine == predefined_graph_info->engine,
-                     "Otherwise, the message should not be transferred to this "
-                     "engine.");
-
-          ten_string_copy(&loc->graph_name,
-                          &predefined_graph_info->engine->graph_name);
-          break;
-        }
+        ten_string_copy(&dest_loc->graph_id,
+                        &singleton_predefined_graph->engine->graph_id);
       }
     }
   }
-}
-
-void ten_msg_clear_and_set_dest_to_extension(ten_shared_ptr_t *self,
-                                             ten_extension_t *extension) {
-  TEN_ASSERT(self && ten_msg_check_integrity(self), "Invalid argument.");
-
-  TEN_ASSERT(extension, "Invalid argument.");
-  // TEN_NOLINTNEXTLINE(thread-check)
-  // thread-check: The graph-related information of the extension remains
-  // unchanged during the lifecycle of engine/graph, allowing safe
-  // cross-thread access.
-  TEN_ASSERT(ten_extension_check_integrity(extension, false),
-             "Invalid use of extension %p.", extension);
-
-  ten_msg_clear_and_set_dest(
-      self,
-      ten_string_get_raw_str(
-          ten_app_get_uri(extension->extension_context->engine->app)),
-      ten_string_get_raw_str(&extension->extension_context->engine->graph_name),
-      ten_string_get_raw_str(
-          &extension->extension_thread->extension_group->name),
-      ten_string_get_raw_str(&extension->name), NULL);
 }
 
 void ten_msg_clear_and_set_dest_from_extension_info(
@@ -463,47 +432,15 @@ const char *ten_msg_get_src_app_uri(ten_shared_ptr_t *self) {
   return ten_string_get_raw_str(&ten_msg_get_raw_msg(self)->src_loc.app_uri);
 }
 
-const char *ten_msg_get_src_graph_name(ten_shared_ptr_t *self) {
+const char *ten_msg_get_src_graph_id(ten_shared_ptr_t *self) {
   TEN_ASSERT(self && ten_msg_check_integrity(self), "Should not happen.");
-  return ten_string_get_raw_str(&ten_msg_get_raw_msg(self)->src_loc.graph_name);
-}
-
-// This hack is only used by msgpack when serializing/deserializing the connect
-// command. Eventually, we should remove this hack.
-static void ten_msg_clear_dest_msgpack_serialization_hack(
-    ten_shared_ptr_t *self) {
-  TEN_ASSERT(self && ten_msg_check_integrity(self), "Should not happen.");
-
-  // If this message contains a JSON, remove the 'dest' information from the
-  // json, too.
-  ten_value_t *value =
-      ten_msg_peek_property(self, TEN_STR_MSGPACK_SERIALIZATION_HACK, NULL);
-  if (value) {
-    TEN_ASSERT(ten_value_is_string(value), "Should not happen.");
-
-    ten_json_t *json = ten_json_from_string(ten_value_peek_c_str(value), NULL);
-    TEN_ASSERT(ten_json_check_integrity(json), "Should not happen.");
-
-    ten_json_object_del(json, TEN_STR_DEST);
-    TEN_ASSERT(ten_json_check_integrity(json), "Should not happen.");
-
-    bool must_free = false;
-    const char *json_str = ten_json_to_string(json, NULL, &must_free);
-    ten_value_reset_to_string_with_size(value, json_str, strlen(json_str));
-
-    if (must_free) {
-      TEN_FREE(json_str);
-    }
-    ten_json_destroy(json);
-  }
+  return ten_string_get_raw_str(&ten_msg_get_raw_msg(self)->src_loc.graph_id);
 }
 
 void ten_msg_clear_dest(ten_shared_ptr_t *self) {
   TEN_ASSERT(self && ten_msg_check_integrity(self), "Should not happen.");
 
   ten_list_clear(&ten_msg_get_raw_msg(self)->dest_loc);
-
-  ten_msg_clear_dest_msgpack_serialization_hack(self);
 }
 
 ten_loc_t *ten_raw_msg_get_src_loc(ten_msg_t *self) {
@@ -566,6 +503,22 @@ TEN_MSG_TYPE ten_msg_type_from_type_and_name_string(const char *type_str,
   return msg_type;
 }
 
+TEN_MSG_TYPE ten_msg_type_from_unique_name_string(const char *name_str) {
+  TEN_ASSERT(name_str, "Invalid argument.");
+
+  TEN_MSG_TYPE msg_type = TEN_MSG_TYPE_INVALID;
+
+  for (size_t i = 0; i < ten_msg_info_size; i++) {
+    if (ten_msg_info[i].msg_unique_name &&
+        ten_c_string_is_equal(name_str, ten_msg_info[i].msg_unique_name)) {
+      msg_type = (TEN_MSG_TYPE)i;
+      break;
+    }
+  }
+
+  return msg_type;
+}
+
 const char *ten_msg_type_to_string(const TEN_MSG_TYPE type) {
   if (type >= ten_msg_info_size) {
     return NULL;
@@ -573,15 +526,173 @@ const char *ten_msg_type_to_string(const TEN_MSG_TYPE type) {
   return ten_msg_info[type].msg_type_name;
 }
 
-bool ten_raw_msg_get_field_from_json(ten_msg_t *self, ten_json_t *json,
-                                     ten_error_t *err) {
-  TEN_ASSERT(self && json, "Should not happen.");
+static bool ten_raw_msg_get_one_field_from_json_internal(
+    ten_msg_t *self, ten_msg_field_process_data_t *field, void *user_data,
+    bool include_internal_field, ten_error_t *err) {
+  TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
+  TEN_ASSERT(field, "Should not happen.");
+  TEN_ASSERT(
+      field->field_value && ten_value_check_integrity(field->field_value),
+      "Should not happen.");
+
+  ten_json_t *json = (ten_json_t *)user_data;
+  TEN_ASSERT(json, "Should not happen.");
+
+  if (!field->is_user_defined_properties) {
+    // Internal fields are uniformly stored in the "_ten" section.
+    if (include_internal_field) {
+      json = ten_json_object_peek_object_forcibly(json, TEN_STR_UNDERLINE_TEN);
+      TEN_ASSERT(json, "Should not happen.");
+
+      json = ten_json_object_peek(json, field->field_name);
+      if (!json) {
+        // Some fields are optional, and it is allowed for the corresponding
+        // JSON block to be absent during deserialization.
+        return true;
+      }
+
+      if (!ten_value_set_from_json(field->field_value, json)) {
+        // If the field value cannot be set from the JSON, it means that the
+        // JSON format is incorrect.
+        if (err) {
+          ten_error_set(err, TEN_ERRNO_INVALID_JSON,
+                        "Invalid JSON format for field %s.", field->field_name);
+        }
+
+        return false;
+      }
+    }
+  } else {
+    // User-defined fields are stored in the root of the JSON. The field value
+    // is an object which includes all the key-value pairs.
+    TEN_ASSERT(ten_value_is_object(field->field_value), "Should not happen.");
+
+    const char *key = NULL;
+    ten_json_t *item = NULL;
+    ten_json_object_foreach(json, key, item) {
+      if (ten_c_string_is_equal(key, TEN_STR_UNDERLINE_TEN)) {
+        // The "ten" section is reserved for internal usage.
+        continue;
+      }
+
+      ten_value_t *value = ten_value_from_json(item);
+      if (!value) {
+        // If the value cannot be created from the JSON, it means that the JSON
+        // format is incorrect.
+        if (err) {
+          ten_error_set(err, TEN_ERRNO_INVALID_JSON,
+                        "Invalid JSON format for field %s.", field->field_name);
+        }
+
+        return false;
+      }
+
+      // TODO(xilin): If the key is already existed, should we overwrite it?
+      ten_list_push_ptr_back(
+          &field->field_value->content.object, ten_value_kv_create(key, value),
+          (ten_ptr_listnode_destroy_func_t)ten_value_kv_destroy);
+    }
+  }
+
+  // During JSON deserialization, the field value may be modified, so we set the
+  // value_is_changed_after_process flag.
+  field->value_is_changed_after_process = true;
+
+  return true;
+}
+
+static bool ten_raw_msg_get_one_field_from_json(
+    ten_msg_t *self, ten_msg_field_process_data_t *field, void *user_data,
+    ten_error_t *err) {
+  return ten_raw_msg_get_one_field_from_json_internal(self, field, user_data,
+                                                      false, err);
+}
+
+bool ten_raw_msg_get_one_field_from_json_include_internal_field(
+    ten_msg_t *self, ten_msg_field_process_data_t *field, void *user_data,
+    ten_error_t *err) {
+  return ten_raw_msg_get_one_field_from_json_internal(self, field, user_data,
+                                                      true, err);
+}
+
+static bool ten_raw_msg_put_one_field_to_json_internal(
+    ten_msg_t *self, ten_msg_field_process_data_t *field, void *user_data,
+    bool include_internal_field, ten_error_t *err) {
+  TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
+  TEN_ASSERT(field, "Should not happen.");
+  TEN_ASSERT(
+      field->field_value && ten_value_check_integrity(field->field_value),
+      "Should not happen.");
+
+  ten_json_t *json = (ten_json_t *)user_data;
+  TEN_ASSERT(json, "Should not happen.");
+
+  if (!field->is_user_defined_properties) {
+    // Internal fields are uniformly stored in the "_ten" section.
+
+    if (include_internal_field) {
+      json = ten_json_object_peek_object_forcibly(json, TEN_STR_UNDERLINE_TEN);
+      TEN_ASSERT(json, "Should not happen.");
+
+      ten_json_object_set_new(json, field->field_name,
+                              ten_value_to_json(field->field_value));
+    }
+  } else {
+    TEN_ASSERT(ten_value_is_object(field->field_value), "Should not happen.");
+
+    ten_value_object_foreach(field->field_value, iter) {
+      ten_value_kv_t *kv = ten_ptr_listnode_get(iter.node);
+      TEN_ASSERT(kv && ten_value_kv_check_integrity(kv), "Should not happen.");
+
+      // The User-defined fields are stored in the root of the JSON.
+      ten_json_object_set_new(json, ten_string_get_raw_str(&kv->key),
+                              ten_value_to_json(kv->value));
+    }
+  }
+
+  // The field value is not modified during JSON serialization.
+  field->value_is_changed_after_process = false;
+
+  return true;
+}
+
+static bool ten_raw_msg_put_one_field_to_json_include_internal_field(
+    ten_msg_t *self, ten_msg_field_process_data_t *field, void *user_data,
+    ten_error_t *err) {
+  TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
+  TEN_ASSERT(field, "Should not happen.");
+  TEN_ASSERT(
+      field->field_value && ten_value_check_integrity(field->field_value),
+      "Should not happen.");
+
+  return ten_raw_msg_put_one_field_to_json_internal(self, field, user_data,
+                                                    true, err);
+}
+
+bool ten_raw_msg_put_one_field_to_json(ten_msg_t *self,
+                                       ten_msg_field_process_data_t *field,
+                                       void *user_data, ten_error_t *err) {
+  TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
+  TEN_ASSERT(field, "Should not happen.");
+  TEN_ASSERT(
+      field->field_value && ten_value_check_integrity(field->field_value),
+      "Should not happen.");
+
+  return ten_raw_msg_put_one_field_to_json_internal(self, field, user_data,
+                                                    false, err);
+}
+
+bool ten_raw_msg_process_field(ten_msg_t *self,
+                               ten_raw_msg_process_one_field_func_t cb,
+                               void *user_data, ten_error_t *err) {
+  TEN_ASSERT(self && ten_raw_msg_check_integrity(self) && cb,
+             "Should not happen.");
 
   for (size_t i = 0; i < ten_msg_fields_info_size; ++i) {
-    ten_msg_get_field_from_json_func_t get_field_from_json =
-        ten_msg_fields_info[i].get_field_from_json;
-    if (get_field_from_json) {
-      if (!get_field_from_json(self, json, err)) {
+    ten_msg_process_field_func_t process_field =
+        ten_msg_fields_info[i].process_field;
+    if (process_field) {
+      if (!process_field(self, cb, user_data, err)) {
         return false;
       }
     }
@@ -590,37 +701,52 @@ bool ten_raw_msg_get_field_from_json(ten_msg_t *self, ten_json_t *json,
   return true;
 }
 
-bool ten_raw_msg_put_field_to_json(ten_msg_t *self, ten_json_t *json,
-                                   ten_error_t *err) {
-  TEN_ASSERT(self && ten_raw_msg_check_integrity(self) && json,
-             "Should not happen.");
+static ten_json_t *ten_raw_msg_to_json(ten_msg_t *self, ten_error_t *err) {
+  TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
+  ten_json_t *json = ten_json_create_object();
+  TEN_ASSERT(json, "Should not happen.");
 
-  for (size_t i = 0; i < ten_msg_fields_info_size; ++i) {
-    ten_msg_put_field_to_json_func_t put_field_to_json =
-        ten_msg_fields_info[i].put_field_to_json;
-    if (put_field_to_json) {
-      if (!put_field_to_json(self, json, err)) {
-        return false;
-      }
-    }
+  bool rc = ten_raw_msg_loop_all_fields(self, ten_raw_msg_put_one_field_to_json,
+                                        json, err);
+
+  if (!rc) {
+    ten_json_destroy(json);
+    return NULL;
   }
 
-  return true;
+  return json;
 }
 
 ten_json_t *ten_msg_to_json(ten_shared_ptr_t *self, ten_error_t *err) {
   TEN_ASSERT(self && ten_msg_check_integrity(self), "Should not happen.");
 
-  ten_json_t *json = NULL;
+  return ten_raw_msg_to_json(ten_msg_get_raw_msg(self), err);
+}
 
-  ten_raw_msg_to_json_func_t to_json =
-      ten_msg_info[ten_msg_get_type(self)].to_json;
-  if (to_json) {
-    ten_msg_t *raw_msg = ten_msg_get_raw_msg(self);
-    json = to_json(raw_msg, err);
+static ten_json_t *ten_raw_msg_to_json_include_internal_field(
+    ten_msg_t *self, ten_error_t *err) {
+  TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
+  ten_json_t *json = ten_json_create_object();
+  TEN_ASSERT(json, "Should not happen.");
+
+  bool rc = ten_raw_msg_loop_all_fields(
+      self, ten_raw_msg_put_one_field_to_json_include_internal_field, json,
+      err);
+
+  if (!rc) {
+    ten_json_destroy(json);
+    return NULL;
   }
 
   return json;
+}
+
+ten_json_t *ten_msg_to_json_include_internal_field(ten_shared_ptr_t *self,
+                                                   ten_error_t *err) {
+  TEN_ASSERT(self && ten_msg_check_integrity(self), "Should not happen.");
+
+  return ten_raw_msg_to_json_include_internal_field(ten_msg_get_raw_msg(self),
+                                                    err);
 }
 
 void ten_raw_msg_copy_field(ten_msg_t *self, ten_msg_t *src,
@@ -656,37 +782,20 @@ static bool ten_raw_msg_init_from_json(ten_msg_t *self, ten_json_t *json,
   TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
   TEN_ASSERT(json && ten_json_check_integrity(json), "Should not happen.");
 
-  const char *type_str =
-      ten_msg_json_get_string_field_in_ten(json, TEN_STR_TYPE);
-  const char *name_str =
-      ten_msg_json_get_string_field_in_ten(json, TEN_STR_NAME);
+  bool rc = ten_raw_msg_loop_all_fields(
+      self, ten_raw_msg_get_one_field_from_json, json, err);
 
-  ten_raw_msg_check_type_and_name_func_t check_msg_type_and_name_string =
-      ten_msg_info[ten_raw_msg_get_type(self)].check_type_and_name;
-  if (check_msg_type_and_name_string) {
-    if (!check_msg_type_and_name_string(self, type_str, name_str, err)) {
-      if (err) {
-        ten_error_set(err, TEN_ERRNO_INVALID_JSON,
-                      "Failed to init a message from json, because the type "
-                      "and name are incorrect.");
-      }
-      return false;
+  if (!rc) {
+    if (err) {
+      ten_error_set(
+          err, TEN_ERRNO_INVALID_JSON,
+          "Failed to init a message from json, because the fields are "
+          "incorrect.");
     }
+    return false;
   }
 
-  ten_raw_msg_init_from_json_func_t init_raw_from_json =
-      ten_msg_info[ten_raw_msg_get_type(self)].init_from_json;
-  if (init_raw_from_json) {
-    return init_raw_from_json(self, json, err);
-  }
-
-  TEN_ASSERT(0, "Should not happen.");
-  if (err) {
-    ten_error_set(
-        err, TEN_ERRNO_INVALID_JSON,
-        "Failed to init a message from json, because the type is unknown.");
-  }
-  return false;
+  return true;
 }
 
 bool ten_msg_from_json(ten_shared_ptr_t *self, ten_json_t *json,
@@ -695,20 +804,6 @@ bool ten_msg_from_json(ten_shared_ptr_t *self, ten_json_t *json,
   TEN_ASSERT(json && ten_json_check_integrity(json), "Should not happen.");
 
   return ten_raw_msg_init_from_json(ten_shared_ptr_get_data(self), json, err);
-}
-
-ten_json_t *ten_raw_msg_to_json(ten_msg_t *self, ten_error_t *err) {
-  TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
-
-  ten_json_t *json = NULL;
-
-  ten_raw_msg_to_json_func_t to_json =
-      ten_msg_info[ten_raw_msg_get_type(self)].to_json;
-  if (to_json) {
-    json = to_json(self, err);
-  }
-
-  return json;
 }
 
 ten_shared_ptr_t *ten_msg_clone(ten_shared_ptr_t *self,
@@ -749,14 +844,20 @@ ten_shared_ptr_t *ten_msg_create_from_msg_type(TEN_MSG_TYPE msg_type) {
       return ten_cmd_close_app_create();
     case TEN_MSG_TYPE_CMD:
       return ten_cmd_custom_create_empty();
+    case TEN_MSG_TYPE_CMD_START_GRAPH:
+      return ten_cmd_start_graph_create();
+    case TEN_MSG_TYPE_CMD_STOP_GRAPH:
+      return ten_cmd_stop_graph_create();
+    case TEN_MSG_TYPE_CMD_TIMEOUT:
+      return ten_cmd_timeout_create(0);
     case TEN_MSG_TYPE_CMD_RESULT:
       return ten_cmd_result_create_from_cmd(TEN_STATUS_CODE_OK, NULL);
     case TEN_MSG_TYPE_DATA:
-      return ten_data_create();
+      return ten_data_create_empty();
     case TEN_MSG_TYPE_AUDIO_FRAME:
-      return ten_audio_frame_create();
+      return ten_audio_frame_create_empty();
     case TEN_MSG_TYPE_VIDEO_FRAME:
-      return ten_video_frame_create();
+      return ten_video_frame_create_empty();
     default:
       return NULL;
   }
@@ -783,12 +884,31 @@ const char *ten_msg_get_type_string(ten_shared_ptr_t *self) {
   return ten_raw_msg_get_type_string(ten_shared_ptr_get_data(self));
 }
 
+TEN_MSG_TYPE ten_msg_type_from_type_string(const char *type_str) {
+  TEN_MSG_TYPE msg_type = TEN_MSG_TYPE_INVALID;
+
+  // Find the correct message type.
+  for (size_t i = 0; i < ten_msg_info_size; i++) {
+    if (ten_msg_info[i].msg_type_name &&
+        ten_c_string_is_equal(type_str, ten_msg_info[i].msg_type_name)) {
+      msg_type = (TEN_MSG_TYPE)i;
+      break;
+    }
+  }
+
+  if (!(msg_type > TEN_MSG_TYPE_INVALID && msg_type < TEN_MSG_TYPE_LAST)) {
+    return TEN_MSG_TYPE_INVALID;
+  }
+
+  return msg_type;
+}
+
 void ten_msg_correct_dest(ten_shared_ptr_t *msg, ten_engine_t *engine) {
   TEN_ASSERT(msg && ten_msg_check_integrity(msg), "Should not happen.");
   TEN_ASSERT(engine && ten_engine_check_integrity(engine, false),
              "Should not happen.");
 
-  ten_string_t *app_uri = ten_app_get_uri(engine->app);
+  const char *app_uri = ten_app_get_uri(engine->app);
 
   ten_msg_t *raw_msg = ten_msg_get_raw_msg(msg);
   ten_list_foreach (&raw_msg->dest_loc, iter) {
@@ -796,7 +916,7 @@ void ten_msg_correct_dest(ten_shared_ptr_t *msg, ten_engine_t *engine) {
 
     bool is_local_app = false;
 
-    if (ten_string_is_equal(&dest_loc->app_uri, app_uri)) {
+    if (ten_string_is_equal_c_str(&dest_loc->app_uri, app_uri)) {
       is_local_app = true;
     } else if (ten_string_is_equal_c_str(&dest_loc->app_uri,
                                          TEN_STR_LOCALHOST)) {
@@ -805,7 +925,7 @@ void ten_msg_correct_dest(ten_shared_ptr_t *msg, ten_engine_t *engine) {
       // 'correct' the real destination location from 'localhost' to the real
       // URI of the app.
 
-      ten_string_copy(&dest_loc->app_uri, app_uri);
+      ten_string_set_from_c_str(&dest_loc->app_uri, app_uri, strlen(app_uri));
       is_local_app = true;
     }
 
@@ -818,9 +938,9 @@ void ten_msg_correct_dest(ten_shared_ptr_t *msg, ten_engine_t *engine) {
       // However, some command, for example, the 'start_graph' command, is a
       // special case, because this kind of command will be handled by the app,
       // rather than by any engines, therefore, we should not set the
-      // destination graph_name in the case of such command.
+      // destination graph_id in the case of such command.
       if (ten_msg_get_type(msg) == TEN_MSG_TYPE_CMD_START_GRAPH) {
-        ten_msg_clear_dest_graph_name(msg);
+        ten_msg_clear_dest_graph_id(msg);
       } else {
         ten_msg_set_dest_engine_if_unspecified_or_predefined_graph_name(
             msg, engine, &engine->app->predefined_graph_infos);
@@ -837,72 +957,23 @@ void ten_msg_correct_dest(ten_shared_ptr_t *msg, ten_engine_t *engine) {
     ten_list_foreach (extensions_info, iter) {
       ten_extension_info_t *extension_info =
           ten_shared_ptr_get_data(ten_smart_ptr_listnode_get(iter.node));
-      ten_extension_info_translate_localhost_to_app_uri(
-          extension_info, ten_string_get_raw_str(app_uri));
+      ten_extension_info_translate_localhost_to_app_uri(extension_info,
+                                                        app_uri);
     }
   }
-}
-
-bool ten_msg_json_get_is_ten_field_exist(ten_json_t *json, const char *field) {
-  TEN_ASSERT(json && ten_json_check_integrity(json), "Should not happen.");
-  TEN_ASSERT(field, "Should not happen.");
-
-  ten_json_t *ten_json =
-      ten_json_object_peek_object(json, TEN_STR_UNDERLINE_TEN);
-  TEN_ASSERT(ten_json, "Should not happen.");
-
-  return ten_json_object_peek(ten_json, field) != NULL;
-}
-
-int64_t ten_msg_json_get_integer_field_in_ten(ten_json_t *json,
-                                              const char *field) {
-  TEN_ASSERT(json && ten_json_check_integrity(json), "Should not happen.");
-  TEN_ASSERT(field, "Should not happen.");
-
-  ten_json_t *ten_json =
-      ten_json_object_peek_object(json, TEN_STR_UNDERLINE_TEN);
-  TEN_ASSERT(ten_json, "Should not happen.");
-
-  return ten_json_object_get_integer(ten_json, field);
-}
-
-const char *ten_msg_json_get_string_field_in_ten(ten_json_t *json,
-                                                 const char *field) {
-  TEN_ASSERT(json && ten_json_check_integrity(json), "Should not happen.");
-  TEN_ASSERT(field, "Should not happen.");
-
-  ten_json_t *ten_json =
-      ten_json_object_peek_object(json, TEN_STR_UNDERLINE_TEN);
-  if (!ten_json) {
-    return NULL;
-  }
-
-  return ten_json_object_peek_string(ten_json, field);
-}
-
-TEN_MSG_TYPE ten_msg_json_get_msg_type(ten_json_t *json) {
-  TEN_ASSERT(json && ten_json_check_integrity(json), "Should not happen.");
-
-  const char *type_str =
-      ten_msg_json_get_string_field_in_ten(json, TEN_STR_TYPE);
-  const char *name_str =
-      ten_msg_json_get_string_field_in_ten(json, TEN_STR_NAME);
-
-  return ten_msg_type_from_type_and_name_string(type_str, name_str);
 }
 
 static bool ten_raw_msg_dump_internal(ten_msg_t *msg, ten_error_t *err,
                                       const char *fmt, va_list ap) {
   TEN_ASSERT(msg && ten_raw_msg_check_integrity(msg), "Should not happen.");
 
-  ten_json_t *msg_json = ten_raw_msg_to_json(msg, err);
+  ten_json_t *msg_json = ten_raw_msg_to_json_include_internal_field(msg, err);
+  TEN_ASSERT(msg_json, "Failed to convert msg type(%s), name(%s) to JSON.",
+             ten_msg_type_to_string(msg->type),
+             ten_value_peek_raw_str(&msg->name, err));
   if (!msg_json) {
     return false;
   }
-
-  TEN_ASSERT(msg_json, "Failed to convert msg type(%s), key(%s) to JSON.",
-             ten_msg_type_to_string(msg->type),
-             ten_string_get_raw_str(&msg->name));
 
   bool must_free = false;
   const char *msg_json_str = ten_json_to_string(msg_json, NULL, &must_free);
@@ -936,7 +1007,7 @@ static bool ten_raw_msg_dump_internal(ten_msg_t *msg, ten_error_t *err,
     }
   }
 
-  TEN_LOGV("%s", ten_string_get_raw_str(&dump_str));
+  TEN_LOGE("%s", ten_string_get_raw_str(&dump_str));
 
   ten_string_deinit(&dump_str);
   ten_string_deinit(&description);
@@ -982,11 +1053,16 @@ static bool ten_raw_msg_set_property(ten_msg_t *self, const char *path,
   TEN_ASSERT(value && ten_value_check_integrity(value), "Should not happen.");
 
   if (!path || !strlen(path)) {
-    if (err) {
-      ten_error_set(err, TEN_ERRNO_INVALID_ARGUMENT,
-                    "path should not be empty.");
+    // If the path is empty, clear and set all properties.
+    ten_value_deinit(&self->properties);
+    bool result = ten_value_init_object_with_move(&self->properties,
+                                                  ten_value_peek_object(value));
+    if (result) {
+      // The contents of `value` have been completely moved into `properties`,
+      // so the outer `value` wrapper is removed to avoid memory leaks.
+      ten_value_destroy(value);
     }
-    return NULL;
+    return result;
   }
 
   bool success = true;
@@ -1045,14 +1121,6 @@ bool ten_msg_set_property(ten_shared_ptr_t *self, const char *path,
   TEN_ASSERT(self && ten_msg_check_integrity(self), "Should not happen.");
   TEN_ASSERT(value && ten_value_check_integrity(value), "Should not happen.");
 
-  if (!path || !strlen(path)) {
-    if (err) {
-      ten_error_set(err, TEN_ERRNO_INVALID_ARGUMENT,
-                    "path should not be empty.");
-    }
-    return NULL;
-  }
-
   return ten_raw_msg_set_property(ten_shared_ptr_get_data(self), path, value,
                                   err);
 }
@@ -1062,11 +1130,8 @@ ten_value_t *ten_raw_msg_peek_property(ten_msg_t *self, const char *path,
   TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
 
   if (!path || !strlen(path)) {
-    if (err) {
-      ten_error_set(err, TEN_ERRNO_INVALID_ARGUMENT,
-                    "path should not be empty.");
-    }
-    return NULL;
+    // If the path is empty, return all properties.
+    return &self->properties;
   }
 
   ten_value_t *result = NULL;
@@ -1120,7 +1185,6 @@ done:
 ten_value_t *ten_msg_peek_property(ten_shared_ptr_t *self, const char *path,
                                    ten_error_t *err) {
   TEN_ASSERT(self && ten_msg_check_integrity(self), "Should not happen.");
-  TEN_ASSERT(path && strlen(path), "path should not be empty.");
 
   return ten_raw_msg_peek_property(ten_msg_get_raw_msg(self), path, err);
 }
@@ -1135,9 +1199,9 @@ bool ten_msg_has_locked_res(ten_shared_ptr_t *self) {
   return ten_raw_msg_has_locked_res(ten_shared_ptr_get_data(self));
 }
 
-const char *ten_raw_msg_get_name(ten_msg_t *self) {
+static const char *ten_raw_msg_get_name(ten_msg_t *self) {
   TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
-  return ten_string_get_raw_str(&self->name);
+  return ten_value_peek_raw_str(&self->name, NULL);
 }
 
 const char *ten_msg_get_name(ten_shared_ptr_t *self) {
@@ -1149,8 +1213,8 @@ const char *ten_msg_get_name(ten_shared_ptr_t *self) {
   return ten_raw_msg_get_name(raw_msg);
 }
 
-bool ten_raw_msg_set_name_with_size(ten_msg_t *self, const char *msg_name,
-                                    size_t msg_name_len, ten_error_t *err) {
+bool ten_raw_msg_set_name_with_len(ten_msg_t *self, const char *msg_name,
+                                   size_t msg_name_len, ten_error_t *err) {
   TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
 
   if (msg_name == NULL) {
@@ -1161,21 +1225,22 @@ bool ten_raw_msg_set_name_with_size(ten_msg_t *self, const char *msg_name,
     return false;
   }
 
-  ten_string_set_formatted(&self->name, "%.*s", msg_name_len, msg_name);
+  ten_string_set_formatted(ten_value_peek_string(&self->name), "%.*s",
+                           msg_name_len, msg_name);
   return true;
 }
 
 bool ten_raw_msg_set_name(ten_msg_t *self, const char *msg_name,
                           ten_error_t *err) {
   TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
-  return ten_raw_msg_set_name_with_size(self, msg_name, strlen(msg_name), err);
+  return ten_raw_msg_set_name_with_len(self, msg_name, strlen(msg_name), err);
 }
 
-bool ten_msg_set_name_with_size(ten_shared_ptr_t *self, const char *msg_name,
-                                size_t msg_name_len, ten_error_t *err) {
+bool ten_msg_set_name_with_len(ten_shared_ptr_t *self, const char *msg_name,
+                               size_t msg_name_len, ten_error_t *err) {
   TEN_ASSERT(self && ten_msg_check_integrity(self), "Should not happen.");
-  return ten_raw_msg_set_name_with_size(ten_shared_ptr_get_data(self), msg_name,
-                                        msg_name_len, err);
+  return ten_raw_msg_set_name_with_len(ten_shared_ptr_get_data(self), msg_name,
+                                       msg_name_len, err);
 }
 
 bool ten_msg_set_name(ten_shared_ptr_t *self, const char *msg_name,

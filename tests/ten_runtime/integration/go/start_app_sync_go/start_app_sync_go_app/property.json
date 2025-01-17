@@ -4,17 +4,13 @@
     "log_level": 2,
     "predefined_graphs": [
       {
-        "name": "0",
+        "name": "default",
         "auto_start": true,
+        "singleton": true,
         "nodes": [
           {
-            "type": "extension_group",
-            "name": "default_extension_group",
-            "addon": "default_extension_group"
-          },
-          {
             "type": "extension",
-            "name": "default_extension",
+            "name": "default_extension_go",
             "addon": "default_extension_go",
             "extension_group": "default_extension_group"
           }

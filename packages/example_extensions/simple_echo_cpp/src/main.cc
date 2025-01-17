@@ -14,19 +14,18 @@ namespace {
 
 class simple_echo_extension_t : public ten::extension_t {
  public:
-  explicit simple_echo_extension_t(const std::string &name)
-      : ten::extension_t(name) {}
+  explicit simple_echo_extension_t(const char *name) : ten::extension_t(name) {}
 
   void on_cmd(ten::ten_env_t &ten_env,
               std::unique_ptr<ten::cmd_t> cmd) override {
     // Parse the command and return a new command with the same name but with a
     // suffix ", too" added to it.
 
-    nlohmann::json json = nlohmann::json::parse(cmd->to_json());
-    auto cmd_name = json["_ten"]["name"];
+    std::string cmd_name = cmd->get_name();
 
     auto cmd_result = ten::cmd_result_t::create(TEN_STATUS_CODE_OK);
-    cmd_result->set_property("detail", (cmd_name.get<std::string>() + ", too"));
+    cmd_result->set_property("detail", cmd_name + ", too");
+
     ten_env.return_result(std::move(cmd_result), std::move(cmd));
   }
 
@@ -35,7 +34,7 @@ class simple_echo_extension_t : public ten::extension_t {
     // Receive data from ten graph.
     auto buf = data->get_buf();
 
-    auto new_data = ten::data_t::create(data->get_name());
+    auto new_data = ten::data_t::create(data->get_name().c_str());
     new_data->alloc_buf(buf.size());
     auto new_buf = new_data->lock_buf();
     memcpy(new_buf.data(), buf.data(), buf.size());
@@ -50,7 +49,8 @@ class simple_echo_extension_t : public ten::extension_t {
     // Receive video frame from ten graph.
     auto buf = video_frame->lock_buf();
 
-    auto new_video_frame = ten::video_frame_t::create(video_frame->get_name());
+    auto new_video_frame =
+        ten::video_frame_t::create(video_frame->get_name().c_str());
     new_video_frame->alloc_buf(buf.size());
     auto new_buf = new_video_frame->lock_buf();
     memcpy(new_buf.data(), buf.data(), buf.size());
@@ -62,7 +62,7 @@ class simple_echo_extension_t : public ten::extension_t {
     new_video_frame->set_height(video_frame->get_height());
     new_video_frame->set_pixel_fmt(video_frame->get_pixel_fmt());
     new_video_frame->set_timestamp(video_frame->get_timestamp());
-    new_video_frame->set_is_eof(video_frame->is_eof());
+    new_video_frame->set_eof(video_frame->is_eof());
 
     ten_env.send_video_frame(std::move(new_video_frame));
   }
@@ -73,7 +73,8 @@ class simple_echo_extension_t : public ten::extension_t {
     // Receive audio frame from ten graph.
     auto buf = audio_frame->lock_buf();
 
-    auto new_audio_frame = ten::audio_frame_t::create(audio_frame->get_name());
+    auto new_audio_frame =
+        ten::audio_frame_t::create(audio_frame->get_name().c_str());
     new_audio_frame->alloc_buf(buf.size());
     auto new_buf = new_audio_frame->lock_buf();
     memcpy(new_buf.data(), buf.data(), buf.size());
@@ -89,7 +90,7 @@ class simple_echo_extension_t : public ten::extension_t {
     new_audio_frame->set_number_of_channels(
         audio_frame->get_number_of_channels());
     new_audio_frame->set_timestamp(audio_frame->get_timestamp());
-    new_audio_frame->set_is_eof(audio_frame->is_eof());
+    new_audio_frame->set_eof(audio_frame->is_eof());
     new_audio_frame->set_data_fmt(audio_frame->get_data_fmt());
     new_audio_frame->set_line_size(audio_frame->get_line_size());
 

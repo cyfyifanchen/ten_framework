@@ -7,9 +7,11 @@
 #include "include_internal/ten_runtime/extension/on_xxx.h"
 
 #include "include_internal/ten_runtime/common/loc.h"
+#include "include_internal/ten_runtime/extension/base_dir.h"
 #include "include_internal/ten_runtime/extension/close.h"
 #include "include_internal/ten_runtime/extension/extension.h"
 #include "include_internal/ten_runtime/extension/metadata.h"
+#include "include_internal/ten_runtime/extension/msg_handling.h"
 #include "include_internal/ten_runtime/extension/path_timer.h"
 #include "include_internal/ten_runtime/extension_group/extension_group.h"
 #include "include_internal/ten_runtime/extension_store/extension_store.h"
@@ -17,9 +19,9 @@
 #include "include_internal/ten_runtime/extension_thread/msg_interface/common.h"
 #include "include_internal/ten_runtime/extension_thread/on_xxx.h"
 #include "include_internal/ten_runtime/metadata/metadata_info.h"
+#include "include_internal/ten_runtime/msg/msg.h"
 #include "include_internal/ten_runtime/ten_env/ten_env.h"
 #include "include_internal/ten_runtime/timer/timer.h"
-#include "ten_utils/lib/alloc.h"
 #include "ten_utils/macro/check.h"
 
 static bool ten_extension_parse_interface_schema(ten_extension_t *self,
@@ -31,11 +33,11 @@ static bool ten_extension_parse_interface_schema(ten_extension_t *self,
              "Invalid argument.");
 
   bool result = ten_schema_store_set_interface_schema_definition(
-      &self->schema_store, api_definition,
-      ten_string_get_raw_str(&self->base_dir), err);
+      &self->schema_store, api_definition, ten_extension_get_base_dir(self),
+      err);
   if (!result) {
     TEN_LOGW("[%s] Failed to set interface schema definition: %s.",
-             ten_extension_get_name(self), ten_error_errmsg(err));
+             ten_extension_get_name(self, true), ten_error_errmsg(err));
   }
 
   return result;
@@ -53,14 +55,14 @@ static void ten_extension_adjust_and_validate_property_on_configure_done(
                                                     &self->property, &err);
   if (!success) {
     TEN_LOGW("[%s] Failed to adjust property type: %s.",
-             ten_extension_get_name(self), ten_error_errmsg(&err));
+             ten_extension_get_name(self, true), ten_error_errmsg(&err));
     goto done;
   }
 
   success = ten_schema_store_validate_properties(&self->schema_store,
                                                  &self->property, &err);
   if (!success) {
-    TEN_LOGW("[%s] Invalid property: %s.", ten_extension_get_name(self),
+    TEN_LOGW("[%s] Invalid property: %s.", ten_extension_get_name(self, true),
              ten_error_errmsg(&err));
     goto done;
   }
@@ -72,7 +74,7 @@ done:
   }
 }
 
-void ten_extension_on_configure_done(ten_env_t *self) {
+bool ten_extension_on_configure_done(ten_env_t *self) {
   TEN_ASSERT(self, "Invalid argument.");
   TEN_ASSERT(ten_env_check_integrity(self, true), "Invalid use of ten_env %p.",
              self);
@@ -82,7 +84,14 @@ void ten_extension_on_configure_done(ten_env_t *self) {
   TEN_ASSERT(ten_extension_check_integrity(extension, true),
              "Invalid use of extension %p.", extension);
 
-  TEN_LOGD("[%s] on_configure() done.", ten_extension_get_name(extension));
+  TEN_LOGD("[%s] on_configure() done.",
+           ten_extension_get_name(extension, true));
+
+  if (extension->state != TEN_EXTENSION_STATE_INIT) {
+    TEN_LOGI("[%s] Failed to on_configure_done() because of incorrect timing.",
+             ten_extension_get_name(extension, true));
+    return false;
+  }
 
   extension->state = TEN_EXTENSION_STATE_ON_CONFIGURE_DONE;
 
@@ -94,15 +103,14 @@ void ten_extension_on_configure_done(ten_env_t *self) {
   if (extension_thread->is_close_triggered) {
     // Do not proceed with the subsequent init/start flow, as the extension
     // thread is about to shut down.
-    return;
+    return true;
   }
 
   ten_error_t err;
   ten_error_init(&err);
 
   bool rc = ten_handle_manifest_info_when_on_configure_done(
-      &extension->manifest_info,
-      ten_string_get_raw_str(ten_extension_get_base_dir(extension)),
+      &extension->manifest_info, ten_extension_get_base_dir(extension),
       &extension->manifest, &err);
   if (!rc) {
     TEN_LOGW("Failed to load extension manifest data, FATAL ERROR.");
@@ -110,8 +118,7 @@ void ten_extension_on_configure_done(ten_env_t *self) {
   }
 
   rc = ten_handle_property_info_when_on_configure_done(
-      &extension->property_info,
-      ten_string_get_raw_str(ten_extension_get_base_dir(extension)),
+      &extension->property_info, ten_extension_get_base_dir(extension),
       &extension->property, &err);
   if (!rc) {
     TEN_LOGW("Failed to load extension property data, FATAL ERROR.");
@@ -160,9 +167,11 @@ void ten_extension_on_configure_done(ten_env_t *self) {
   ten_extension_on_init(extension->ten_env);
 
   ten_error_deinit(&err);
+
+  return true;
 }
 
-void ten_extension_on_init_done(ten_env_t *self) {
+bool ten_extension_on_init_done(ten_env_t *self) {
   TEN_ASSERT(self, "Invalid argument.");
   TEN_ASSERT(ten_env_check_integrity(self, true), "Invalid use of ten_env %p.",
              self);
@@ -172,7 +181,14 @@ void ten_extension_on_init_done(ten_env_t *self) {
   TEN_ASSERT(ten_extension_check_integrity(extension, true),
              "Invalid use of extension %p.", extension);
 
-  TEN_LOGD("[%s] on_init() done.", ten_extension_get_name(extension));
+  TEN_LOGD("[%s] on_init() done.", ten_extension_get_name(extension, true));
+
+  if (extension->state != TEN_EXTENSION_STATE_ON_CONFIGURE_DONE) {
+    // `on_init_done` can only be called at specific times.
+    TEN_LOGI("[%s] Failed to on_init_done() because of incorrect timing.",
+             ten_extension_get_name(extension, true));
+    return false;
+  }
 
   extension->state = TEN_EXTENSION_STATE_ON_INIT_DONE;
 
@@ -182,14 +198,48 @@ void ten_extension_on_init_done(ten_env_t *self) {
              "Should not happen.");
 
   if (extension_thread->is_close_triggered) {
-    return;
+    return true;
   }
 
   // Trigger on_start of extension.
   ten_extension_on_start(extension);
+
+  return true;
 }
 
-void ten_extension_on_start_done(ten_env_t *self) {
+static void ten_extension_flush_all_pending_msgs(ten_extension_t *self) {
+  TEN_ASSERT(self, "Invalid argument.");
+  TEN_ASSERT(ten_extension_check_integrity(self, true),
+             "Invalid use of extension %p.", self);
+
+  // Flush the previously got messages, which are received before
+  // on_init_done(), into the extension.
+  ten_extension_thread_t *extension_thread = self->extension_thread;
+  ten_list_foreach (&extension_thread->pending_msgs, iter) {
+    ten_shared_ptr_t *msg = ten_smart_ptr_listnode_get(iter.node);
+    TEN_ASSERT(msg, "Should not happen.");
+
+    ten_loc_t *dest_loc = ten_msg_get_first_dest_loc(msg);
+    TEN_ASSERT(dest_loc, "Should not happen.");
+
+    if (ten_string_is_equal(&dest_loc->extension_name, &self->name)) {
+      ten_extension_handle_in_msg(self, msg);
+      ten_list_remove_node(&extension_thread->pending_msgs, iter.node);
+    }
+  }
+
+  // Flush the previously got messages, which are received before
+  // on_init_done(), into the extension.
+  ten_list_foreach (&self->pending_msgs, iter) {
+    ten_shared_ptr_t *msg = ten_smart_ptr_listnode_get(iter.node);
+    TEN_ASSERT(msg, "Should not happen.");
+
+    ten_extension_handle_in_msg(self, msg);
+  }
+  ten_list_clear(&self->pending_msgs);
+}
+
+bool ten_extension_on_start_done(ten_env_t *self) {
   TEN_ASSERT(self, "Invalid argument.");
   TEN_ASSERT(ten_env_check_integrity(self, true), "Invalid use of ten_env %p.",
              self);
@@ -199,12 +249,22 @@ void ten_extension_on_start_done(ten_env_t *self) {
   TEN_ASSERT(ten_extension_check_integrity(extension, true),
              "Invalid use of extension %p.", extension);
 
-  TEN_LOGI("[%s] on_start() done.", ten_extension_get_name(extension));
+  TEN_LOGI("[%s] on_start() done.", ten_extension_get_name(extension, true));
+
+  if (extension->state != TEN_EXTENSION_STATE_ON_START) {
+    TEN_LOGI("[%s] Failed to on_start_done() because of incorrect timing.",
+             ten_extension_get_name(extension, true));
+    return false;
+  }
 
   extension->state = TEN_EXTENSION_STATE_ON_START_DONE;
+
+  ten_extension_flush_all_pending_msgs(extension);
+
+  return true;
 }
 
-void ten_extension_on_stop_done(ten_env_t *self) {
+bool ten_extension_on_stop_done(ten_env_t *self) {
   TEN_ASSERT(self, "Invalid argument.");
   TEN_ASSERT(ten_env_check_integrity(self, true), "Invalid use of ten_env %p.",
              self);
@@ -214,11 +274,19 @@ void ten_extension_on_stop_done(ten_env_t *self) {
   TEN_ASSERT(ten_extension_check_integrity(extension, true),
              "Invalid use of extension %p.", extension);
 
-  TEN_LOGI("[%s] on_stop() done.", ten_extension_get_name(extension));
+  TEN_LOGI("[%s] on_stop() done.", ten_extension_get_name(extension, true));
+
+  if (extension->state != TEN_EXTENSION_STATE_ON_START_DONE) {
+    TEN_LOGI("[%s] Failed to on_stop_done() because of incorrect timing.",
+             ten_extension_get_name(extension, true));
+    return false;
+  }
 
   extension->state = TEN_EXTENSION_STATE_ON_STOP_DONE;
 
   ten_extension_do_pre_close_action(extension);
+
+  return true;
 }
 
 static void ten_extension_thread_del_extension(ten_extension_thread_t *self,
@@ -233,7 +301,7 @@ static void ten_extension_thread_del_extension(ten_extension_thread_t *self,
              "Invalid use of extension %p.", extension);
 
   TEN_LOGD("[%s] Deleted from extension thread (%s).",
-           ten_extension_get_name(extension),
+           ten_extension_get_name(extension, true),
            ten_string_get_raw_str(&self->extension_group->name));
 
   // Delete the extension from the extension store of the extension thread, so
@@ -266,7 +334,7 @@ static void ten_extension_thread_on_extension_on_deinit_done(
   ten_extension_thread_del_extension(self, deinit_extension);
 }
 
-void ten_extension_on_deinit_done(ten_env_t *self) {
+bool ten_extension_on_deinit_done(ten_env_t *self) {
   TEN_ASSERT(self, "Invalid argument.");
   TEN_ASSERT(ten_env_check_integrity(self, true), "Invalid use of ten_env %p.",
              self);
@@ -276,26 +344,34 @@ void ten_extension_on_deinit_done(ten_env_t *self) {
   TEN_ASSERT(ten_extension_check_integrity(extension, true),
              "Invalid use of extension %p.", extension);
 
+  if (extension->state != TEN_EXTENSION_STATE_ON_DEINIT) {
+    TEN_LOGI("[%s] Failed to on_deinit_done() because of incorrect timing.",
+             ten_extension_get_name(extension, true));
+    return false;
+  }
+
   if (!ten_list_is_empty(&self->ten_proxy_list)) {
     // There is still the presence of ten_env_proxy, so the closing process
     // cannot continue.
     TEN_LOGI(
         "[%s] Failed to on_deinit_done() because of existed ten_env_proxy.",
-        ten_extension_get_name(extension));
-    return;
+        ten_extension_get_name(extension, true));
+    return true;
   }
 
   TEN_ASSERT(extension->state >= TEN_EXTENSION_STATE_ON_DEINIT,
              "Should not happen.");
 
   if (extension->state == TEN_EXTENSION_STATE_ON_DEINIT_DONE) {
-    return;
+    return false;
   }
 
   extension->state = TEN_EXTENSION_STATE_ON_DEINIT_DONE;
 
-  TEN_LOGD("[%s] on_deinit() done.", ten_extension_get_name(extension));
+  TEN_LOGD("[%s] on_deinit() done.", ten_extension_get_name(extension, true));
 
   ten_extension_thread_on_extension_on_deinit_done(extension->extension_thread,
                                                    extension);
+
+  return true;
 }

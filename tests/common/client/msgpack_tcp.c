@@ -6,21 +6,21 @@
 //
 #include "tests/common/client/msgpack_tcp.h"
 
+#include <string.h>
+
 #include "core_protocols/msgpack/common/parser.h"
 #include "core_protocols/msgpack/msg/msg.h"
 #include "include_internal/ten_runtime/msg/msg.h"
-#include "ten_utils/macro/check.h"
-#include "ten_runtime/ten.h"
 #include "ten_utils/container/list.h"
 #include "ten_utils/lib/alloc.h"
-#include "ten_utils/lib/json.h"
 #include "ten_utils/lib/smart_ptr.h"
 #include "ten_utils/lib/string.h"
+#include "ten_utils/macro/check.h"
 #include "tests/common/client/tcp.h"
 
 static ten_buf_t ten_test_msgpack_tcp_client_msgs_to_buf(ten_list_t *msgs) {
   TEN_ASSERT(msgs && ten_list_check_integrity(msgs), "Invalid argument.");
-  return ten_msgpack_serialize_msg(msgs, NULL);
+  return ten_msgpack_serialize_msgs(msgs, NULL);
 }
 
 static void ten_test_msgpack_tcp_client_buf_to_msgs(
@@ -30,7 +30,7 @@ static void ten_test_msgpack_tcp_client_buf_to_msgs(
 
   ten_test_msgpack_tcp_client_t *msgpack_client =
       (ten_test_msgpack_tcp_client_t *)client;
-  ten_msgpack_deserialize_msg(
+  ten_msgpack_deserialize_msgs(
       &msgpack_client->parser,
       TEN_BUF_STATIC_INIT_WITH_DATA_UNOWNED(data, data_size), msgs);
 }
@@ -96,32 +96,16 @@ ten_shared_ptr_t *ten_test_msgpack_tcp_client_send_and_recv_msg(
 }
 
 bool ten_test_msgpack_tcp_client_send_data(ten_test_msgpack_tcp_client_t *self,
-                                           const char *graph_name,
+                                           const char *graph_id,
                                            const char *extension_group_name,
                                            const char *extension_name,
                                            void *data, size_t size) {
   TEN_ASSERT(self, "Invalid argument.");
-  TEN_ASSERT(graph_name && extension_group_name && extension_name && data,
+  TEN_ASSERT(graph_id && extension_group_name && extension_name && data,
              "Invalid argument.");
 
-  return ten_test_tcp_client_send_data(&self->base, graph_name,
-                                       extension_group_name, extension_name,
-                                       data, size);
-}
-
-bool ten_test_msgpack_tcp_client_send_json(ten_test_msgpack_tcp_client_t *self,
-                                           ten_json_t *cmd_json,
-                                           ten_error_t *err) {
-  TEN_ASSERT(self, "Invalid argument.");
-  TEN_ASSERT(cmd_json, "Invalid argument.");
-
-  return ten_test_tcp_client_send_json(&self->base, cmd_json, err);
-}
-
-ten_json_t *ten_test_msgpack_tcp_client_send_and_recv_json(
-    ten_test_msgpack_tcp_client_t *self, ten_json_t *cmd_json,
-    ten_error_t *err) {
-  return ten_test_tcp_client_send_and_recv_json(&self->base, cmd_json, err);
+  return ten_test_tcp_client_send_data(
+      &self->base, graph_id, extension_group_name, extension_name, data, size);
 }
 
 bool ten_test_msgpack_tcp_client_close_app(

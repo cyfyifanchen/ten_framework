@@ -5,6 +5,7 @@
 // Refer to the "LICENSE" file in the root directory for more information.
 //
 #include "include_internal/ten_runtime/binding/python/common/buf.h"
+#include "include_internal/ten_runtime/binding/python/common/error.h"
 #include "include_internal/ten_runtime/binding/python/msg/audio_frame.h"
 #include "include_internal/ten_runtime/binding/python/msg/cmd.h"
 #include "include_internal/ten_runtime/binding/python/msg/cmd_result.h"
@@ -13,16 +14,15 @@
 #include "include_internal/ten_runtime/binding/python/msg/video_frame.h"
 
 static PyMethodDef ten_py_msg_type_methods[] = {
-    {"to_json", ten_py_msg_to_json, METH_VARARGS, NULL},
-    {"from_json", ten_py_msg_from_json, METH_VARARGS, NULL},
     {"get_name", ten_py_msg_get_name, METH_VARARGS, NULL},
     {"set_name", ten_py_msg_set_name, METH_VARARGS, NULL},
-    {"get_property_string", ten_py_msg_get_property_string, METH_VARARGS, NULL},
-    {"set_property_string", ten_py_msg_set_property_string, METH_VARARGS, NULL},
+    {"set_dest", ten_py_msg_set_dest, METH_VARARGS, NULL},
     {"get_property_to_json", ten_py_msg_get_property_to_json, METH_VARARGS,
      NULL},
     {"set_property_from_json", ten_py_msg_set_property_from_json, METH_VARARGS,
      NULL},
+    {"get_property_string", ten_py_msg_get_property_string, METH_VARARGS, NULL},
+    {"set_property_string", ten_py_msg_set_property_string, METH_VARARGS, NULL},
     {"get_property_int", ten_py_msg_get_property_int, METH_VARARGS, NULL},
     {"set_property_int", ten_py_msg_set_property_int, METH_VARARGS, NULL},
     {"get_property_float", ten_py_msg_get_property_float, METH_VARARGS, NULL},
@@ -76,8 +76,9 @@ PyTypeObject *ten_py_cmd_result_py_type(void) {
        NULL},
       {"set_status_code", ten_py_cmd_result_set_status_code, METH_VARARGS,
        NULL},
-      {"set_is_final", ten_py_cmd_result_set_is_final, METH_VARARGS, NULL},
-      {"get_is_final", ten_py_cmd_result_get_is_final, METH_VARARGS, NULL},
+      {"set_final", ten_py_cmd_result_set_final, METH_VARARGS, NULL},
+      {"is_final", ten_py_cmd_result_is_final, METH_VARARGS, NULL},
+      {"is_completed", ten_py_cmd_result_is_completed, METH_VARARGS, NULL},
       {NULL, NULL, 0, NULL},
   };
 
@@ -138,7 +139,7 @@ PyTypeObject *ten_py_video_frame_py_type(void) {
       {"get_timestamp", ten_py_video_frame_get_timestamp, METH_VARARGS, NULL},
       {"set_timestamp", ten_py_video_frame_set_timestamp, METH_VARARGS, NULL},
       {"is_eof", ten_py_video_frame_is_eof, METH_VARARGS, NULL},
-      {"set_is_eof", ten_py_video_frame_set_is_eof, METH_VARARGS, NULL},
+      {"set_eof", ten_py_video_frame_set_eof, METH_VARARGS, NULL},
       {"get_pixel_fmt", ten_py_video_frame_get_pixel_fmt, METH_VARARGS, NULL},
       {"set_pixel_fmt", ten_py_video_frame_set_pixel_fmt, METH_VARARGS, NULL},
       {NULL, NULL, 0, NULL},
@@ -191,8 +192,8 @@ PyTypeObject *ten_py_audio_frame_py_type(void) {
       {"set_data_fmt", ten_py_audio_frame_set_data_fmt, METH_VARARGS, NULL},
       {"get_line_size", ten_py_audio_frame_get_line_size, METH_VARARGS, NULL},
       {"set_line_size", ten_py_audio_frame_set_line_size, METH_VARARGS, NULL},
-      {"get_is_eof", ten_py_audio_frame_is_eof, METH_VARARGS, NULL},
-      {"set_is_eof", ten_py_audio_frame_set_is_eof, METH_VARARGS, NULL},
+      {"is_eof", ten_py_audio_frame_is_eof, METH_VARARGS, NULL},
+      {"set_eof", ten_py_audio_frame_set_eof, METH_VARARGS, NULL},
       {NULL, NULL, 0, NULL},
   };
 
@@ -227,6 +228,30 @@ PyTypeObject *ten_py_buf_py_type(void) {
       .tp_flags = Py_TPFLAGS_DEFAULT,
       .tp_dealloc = ten_py_buf_destroy,
       .tp_as_buffer = &py_buffer_procs,
+  };
+
+  return &py_type;
+}
+
+PyTypeObject *ten_py_error_py_type(void) {
+  static PyMethodDef py_methods[] = {
+      {"errno", ten_py_error_get_errno, METH_VARARGS, NULL},
+      {"err_msg", ten_py_error_get_errmsg, METH_VARARGS, NULL},
+      {NULL, NULL, 0, NULL},
+  };
+
+  static PyTypeObject py_type = {
+      PyVarObject_HEAD_INIT(NULL, 0).tp_name =
+          "libten_runtime_python._TenError",
+      .tp_doc = PyDoc_STR("_TenError"),
+      .tp_basicsize = sizeof(ten_py_error_t),
+      .tp_itemsize = 0,
+      .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+      .tp_dealloc = ten_py_error_destroy,
+      .tp_methods = py_methods,
+      .tp_init = NULL,
+      .tp_getset = NULL,
+      .tp_new = NULL,
   };
 
   return &py_type;

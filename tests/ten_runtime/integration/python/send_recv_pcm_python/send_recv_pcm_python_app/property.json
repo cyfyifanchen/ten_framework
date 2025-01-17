@@ -3,14 +3,9 @@
     "log_level": 2,
     "predefined_graphs": [
       {
-        "name": "0",
+        "name": "default",
         "auto_start": true,
         "nodes": [
-          {
-            "type": "extension_group",
-            "name": "default_extension_group",
-            "addon": "default_extension_group"
-          },
           {
             "type": "extension",
             "name": "simple_http_server_cpp",
@@ -35,14 +30,12 @@
         ],
         "connections": [
           {
-            "extension_group": "default_extension_group",
             "extension": "simple_http_server_cpp",
             "cmd": [
               {
                 "name": "start",
                 "dest": [
                   {
-                    "extension_group": "default_extension_group",
                     "extension": "default_extension_python"
                   }
                 ]
@@ -50,14 +43,12 @@
             ]
           },
           {
-            "extension_group": "default_extension_group",
             "extension": "default_extension_python",
             "audio_frame": [
               {
                 "name": "pcm",
                 "dest": [
                   {
-                    "extension_group": "default_extension_group",
                     "extension": "simple_echo_cpp"
                   }
                 ]
@@ -65,14 +56,12 @@
             ]
           },
           {
-            "extension_group": "default_extension_group",
             "extension": "simple_echo_cpp",
             "audio_frame": [
               {
                 "name": "pcm",
                 "dest": [
                   {
-                    "extension_group": "default_extension_group",
                     "extension": "default_extension_python"
                   }
                 ]

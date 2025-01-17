@@ -45,9 +45,10 @@ TEN_UTILS_API double ten_value_get_float64(ten_value_t *self, ten_error_t *err);
 
 TEN_UTILS_API bool ten_value_get_bool(ten_value_t *self, ten_error_t *err);
 
-TEN_UTILS_API const char *ten_value_peek_string(ten_value_t *self);
+TEN_UTILS_API ten_string_t *ten_value_peek_string(ten_value_t *self);
 
-TEN_UTILS_API const char *ten_value_peek_c_str(ten_value_t *self);
+TEN_UTILS_API const char *ten_value_peek_raw_str(ten_value_t *self,
+                                                 ten_error_t *err);
 
 TEN_UTILS_API void *ten_value_get_ptr(ten_value_t *self, ten_error_t *err);
 
@@ -55,5 +56,7 @@ TEN_UTILS_API ten_buf_t *ten_value_peek_buf(ten_value_t *self);
 
 TEN_UTILS_API ten_list_t *ten_value_peek_array(ten_value_t *self);
 
-TEN_UTILS_API ten_value_t *ten_value_array_peek(ten_value_t *self,
-                                                size_t index);
+TEN_UTILS_API ten_list_t *ten_value_peek_object(ten_value_t *self);
+
+TEN_UTILS_API ten_value_t *ten_value_array_peek(ten_value_t *self, size_t index,
+                                                ten_error_t *err);

@@ -106,7 +106,6 @@ func NewApp(
 	return pApp, nil
 }
 
-//
 //export tenGoAppOnConfigure
 func tenGoAppOnConfigure(
 	appID C.uintptr_t,
@@ -126,16 +125,23 @@ func tenGoAppOnConfigure(
 	if !ok {
 		panic(
 			fmt.Sprintf(
-				"Failed to get ten from handle map, id: %d.",
+				"Failed to get ten env from handle map, id: %d.",
 				uintptr(tenEnvID),
 			),
 		)
 	}
 
+	tenEnvInstance, ok := tenEnvObj.(*tenEnv)
+	if !ok {
+		// Should not happen.
+		panic("Invalid ten object type.")
+	}
+
+	tenEnvInstance.attachToApp(appObj)
+
 	appObj.OnConfigure(tenEnvObj)
 }
 
-//
 //export tenGoAppOnInit
 func tenGoAppOnInit(
 	appID C.uintptr_t,
@@ -155,7 +161,7 @@ func tenGoAppOnInit(
 	if !ok {
 		panic(
 			fmt.Sprintf(
-				"Failed to get ten from handle map, id: %d.",
+				"Failed to get ten env from handle map, id: %d.",
 				uintptr(tenEnvID),
 			),
 		)
@@ -180,7 +186,7 @@ func tenGoAppOnDeinit(appID C.uintptr_t, tenEnvID C.uintptr_t) {
 	if !ok {
 		panic(
 			fmt.Sprintf(
-				"Failed to get ten from handle map, id: %d.",
+				"Failed to get ten env from handle map, id: %d.",
 				uintptr(tenEnvID),
 			),
 		)

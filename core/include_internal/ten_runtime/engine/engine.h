@@ -29,6 +29,7 @@
 
 typedef struct ten_extension_context_t ten_extension_context_t;
 typedef struct ten_app_t ten_app_t;
+typedef struct ten_env_t ten_env_t;
 
 struct ten_engine_t {
   ten_signature_t signature;
@@ -42,13 +43,15 @@ struct ten_engine_t {
   ten_app_t *app;
   ten_extension_context_t *extension_context;
 
+  ten_env_t *ten_env;
+
   // This means that the engine can start to handle messages, i.e. all the
   // extension threads are started successfully.
   bool is_ready_to_handle_msg;
 
   // When app creates an engine, it will create a randomized graph ID for the
-  // engine.
-  ten_string_t graph_name;
+  // engine. It _must_ be a UUID4 string.
+  ten_string_t graph_id;
 
   ten_path_table_t *path_table;
 
@@ -105,4 +108,5 @@ TEN_RUNTIME_PRIVATE_API ten_runloop_t *ten_engine_get_attached_runloop(
 TEN_RUNTIME_PRIVATE_API bool ten_engine_is_ready_to_handle_msg(
     ten_engine_t *self);
 
-TEN_RUNTIME_PRIVATE_API const char *ten_engine_get_name(ten_engine_t *self);
+TEN_RUNTIME_PRIVATE_API const char *ten_engine_get_id(ten_engine_t *self,
+                                                      bool check_thread);

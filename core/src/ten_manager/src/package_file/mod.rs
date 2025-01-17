@@ -13,22 +13,26 @@ use anyhow::Result;
 use console::Emoji;
 use globset::{GlobBuilder, GlobSetBuilder};
 use ignore::{overrides::OverrideBuilder, WalkBuilder};
+use zip::zip_files_to_file;
+
+use ten_rust::pkg_info::manifest::parse_manifest_in_folder;
+use ten_rust::pkg_info::PkgInfo;
 
 use super::{config::TmanConfig, constants::TEN_PACKAGE_FILE_EXTENSION};
 use crate::{
-    constants::{DOT_TEN_DIR, PACKAGE_DIR_IN_DOT_TEN_DIR, TEN_PACKAGES_DIR},
+    constants::{
+        DOT_TEN_DIR, MANIFEST_JSON_FILENAME, PACKAGE_DIR_IN_DOT_TEN_DIR,
+        TEN_PACKAGES_DIR,
+    },
     log::tman_verbose_println,
     utils::pathbuf_to_string_lossy,
 };
-use ten_rust::pkg_info::manifest::parse_manifest_in_folder;
-use ten_rust::pkg_info::PkgInfo;
-use zip::zip_files_to_file;
 
 pub fn get_package_zip_file_name(pkg_info: &PkgInfo) -> Result<String> {
     let output_zip_file_name = format!(
         "{}_{}.{}",
-        pkg_info.pkg_identity.name,
-        pkg_info.version,
+        pkg_info.basic_info.type_and_name.name,
+        pkg_info.basic_info.version,
         TEN_PACKAGE_FILE_EXTENSION
     );
 
@@ -60,8 +64,8 @@ pub fn create_package_zip_file(
     .map_err(|e| {
         anyhow::anyhow!(
             "Failed to check property.json for {}:{}, {}",
-            manifest.pkg_type,
-            manifest.name,
+            manifest.type_and_name.pkg_type,
+            manifest.type_and_name.name,
             e
         )
     })?;
@@ -89,7 +93,7 @@ pub fn create_package_zip_file(
 
     // manifest.json is needed for all TEN packages.
     globset_builder.add(
-        GlobBuilder::new("manifest.json")
+        GlobBuilder::new(MANIFEST_JSON_FILENAME)
             .literal_separator(false)
             .build()?,
     );

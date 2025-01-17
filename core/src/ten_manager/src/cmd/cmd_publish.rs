@@ -11,19 +11,20 @@ use clap::{ArgMatches, Command};
 use console::Emoji;
 use indicatif::HumanDuration;
 
+use ten_rust::pkg_info::get_pkg_info_from_path;
+
 use crate::config::TmanConfig;
 use crate::log::tman_verbose_println;
 use crate::package_file::create_package_zip_file;
 use crate::package_file::get_package_zip_file_name;
 use crate::registry::upload_package;
-use ten_rust::pkg_info::get_pkg_info_from_path;
 
 #[derive(Debug)]
 pub struct PublishCommand {}
 
 pub fn create_sub_cmd(_args_cfg: &crate::cmd_line::ArgsCfg) -> Command {
     Command::new("publish")
-        .about("Publish a package. For more detailed usage, run 'publish -h'")
+        .about("Publish a package")
         .after_help("Switch to the base directory of the TEN package you want to publish, then simply run 'tman publish' directly in that directory.")
 }
 

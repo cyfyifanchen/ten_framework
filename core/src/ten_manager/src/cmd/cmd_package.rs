@@ -11,19 +11,20 @@ use clap::{ArgMatches, Command};
 use console::Emoji;
 use indicatif::HumanDuration;
 
+use ten_rust::pkg_info::get_pkg_info_from_path;
+
 use crate::{
     config::TmanConfig,
     log::tman_verbose_println,
     package_file::{create_package_zip_file, get_package_zip_file_name},
 };
-use ten_rust::pkg_info::get_pkg_info_from_path;
 
 #[derive(Debug)]
 pub struct PackageCommand {}
 
 pub fn create_sub_cmd(_args_cfg: &crate::cmd_line::ArgsCfg) -> Command {
     Command::new("package")
-        .about("Create a package file. For more detailed usage, run 'package -h'")
+        .about("Create a package file")
         .after_help("Switch to the base directory of the TEN package you want to package, then simply run 'tman package' directly in that directory.")
 }
 

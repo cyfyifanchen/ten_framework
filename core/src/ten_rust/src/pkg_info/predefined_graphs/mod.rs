@@ -9,17 +9,17 @@ pub mod extension;
 use anyhow::Result;
 
 use crate::pkg_info::{
-    graph::Graph, property::predefined_graph::PropertyPredefinedGraph,
+    graph::Graph, property::predefined_graph::PredefinedGraph,
 };
 
 use super::graph::{GraphConnection, GraphNode};
 
 pub fn pkg_predefined_graphs_find<F>(
-    pkg_predefined_graphs: Option<&Vec<PropertyPredefinedGraph>>,
+    pkg_predefined_graphs: Option<&Vec<PredefinedGraph>>,
     predicate: F,
-) -> Option<&PropertyPredefinedGraph>
+) -> Option<&PredefinedGraph>
 where
-    F: Fn(&&PropertyPredefinedGraph) -> bool,
+    F: Fn(&&PredefinedGraph) -> bool,
 {
     match pkg_predefined_graphs {
         None => None,
@@ -32,10 +32,10 @@ where
 pub fn get_pkg_predefined_graph_from_nodes_and_connections(
     graph_name: &str,
     auto_start: bool,
-    nodes: &Vec<GraphNode>,
-    connections: &Vec<GraphConnection>,
-) -> Result<PropertyPredefinedGraph> {
-    Ok(PropertyPredefinedGraph {
+    nodes: &[GraphNode],
+    connections: &[GraphConnection],
+) -> Result<PredefinedGraph> {
+    Ok(PredefinedGraph {
         name: graph_name.to_string(),
         auto_start: Some(auto_start),
         graph: Graph {

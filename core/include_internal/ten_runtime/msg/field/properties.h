@@ -10,6 +10,7 @@
 
 #include <stdbool.h>
 
+#include "include_internal/ten_runtime/msg/loop_fields.h"
 #include "ten_utils/container/list.h"
 #include "ten_utils/value/value.h"
 
@@ -26,13 +27,9 @@ TEN_RUNTIME_API ten_value_t *ten_raw_msg_peek_property(ten_msg_t *self,
                                                        const char *path,
                                                        ten_error_t *err);
 
-TEN_RUNTIME_API bool ten_raw_msg_properties_to_json(ten_msg_t *self,
-                                                    ten_json_t *json,
-                                                    ten_error_t *err);
-
-TEN_RUNTIME_API bool ten_raw_msg_properties_from_json(ten_msg_t *self,
-                                                      ten_json_t *json,
-                                                      ten_error_t *err);
-
 TEN_RUNTIME_API void ten_raw_msg_properties_copy(
     ten_msg_t *self, ten_msg_t *src, ten_list_t *excluded_field_ids);
+
+TEN_RUNTIME_PRIVATE_API bool ten_raw_msg_properties_process(
+    ten_msg_t *self, ten_raw_msg_process_one_field_func_t cb, void *user_data,
+    ten_error_t *err);

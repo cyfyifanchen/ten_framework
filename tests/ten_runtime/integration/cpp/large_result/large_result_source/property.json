@@ -2,14 +2,9 @@
   "_ten": {
     "predefined_graphs": [
       {
-        "name": "0",
+        "name": "default",
         "auto_start": true,
         "nodes": [
-          {
-            "type": "extension_group",
-            "name": "default_extension_group",
-            "addon": "default_extension_group"
-          },
           {
             "type": "extension",
             "name": "simple_http_server_cpp",
@@ -25,14 +20,12 @@
         ],
         "connections": [
           {
-            "extension_group": "default_extension_group",
             "extension": "simple_http_server_cpp",
             "cmd": [
               {
                 "name": "hello_world",
                 "dest": [
                   {
-                    "extension_group": "default_extension_group",
                     "extension": "default_extension_cpp"
                   }
                 ]

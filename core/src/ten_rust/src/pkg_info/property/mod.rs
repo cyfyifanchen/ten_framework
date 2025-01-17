@@ -13,7 +13,7 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -21,8 +21,9 @@ use super::{
     constants::{PROPERTY_JSON_FILENAME, TEN_FIELD_IN_PROPERTY},
     utils::read_file_to_string,
 };
-use crate::{json_schema, pkg_info::default_app_loc};
-use predefined_graph::PropertyPredefinedGraph;
+use crate::pkg_info::graph::is_app_default_loc_or_none;
+use crate::{json_schema, pkg_info::localhost};
+use predefined_graph::PredefinedGraph;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Property {
@@ -74,14 +75,24 @@ impl Property {
 
         Ok(())
     }
+
+    pub fn get_app_uri(&self) -> String {
+        if let Some(_ten) = &self._ten {
+            if let Some(uri) = &_ten.uri {
+                return uri.clone();
+            }
+        }
+
+        localhost()
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TenInProperty {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub predefined_graphs: Option<Vec<PropertyPredefinedGraph>>,
+    pub predefined_graphs: Option<Vec<PredefinedGraph>>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "is_app_default_loc_or_none")]
     pub uri: Option<String>,
 
     #[serde(flatten)]
@@ -91,13 +102,26 @@ pub struct TenInProperty {
 impl TenInProperty {
     pub fn validate_and_complete(&mut self) -> Result<()> {
         if let Some(graphs) = &mut self.predefined_graphs {
+            {
+                let mut seen_graph_names = std::collections::HashSet::new();
+                for graph in graphs.iter() {
+                    if !seen_graph_names.insert(&graph.name) {
+                        return Err(anyhow::anyhow!(
+                            "Duplicate predefined graph name detected: '{}'. \
+                            Each predefined_graph must have a unique 'name'.",
+                            graph.name
+                        ));
+                    }
+                }
+            }
+
             for graph in graphs {
                 graph.validate_and_complete()?;
             }
         }
 
         if self.uri.is_none() {
-            self.uri = Some(default_app_loc());
+            self.uri = Some(localhost());
         }
 
         Ok(())
@@ -124,30 +148,35 @@ pub fn parse_property_from_file<P: AsRef<Path>>(
     Property::from_str(&content)
 }
 
-pub fn parse_property_in_folder(folder_path: &Path) -> Result<Property> {
+pub fn parse_property_in_folder(
+    folder_path: &Path,
+) -> Result<Option<Property>> {
     // Path to the property.json file.
     let property_path = folder_path.join(PROPERTY_JSON_FILENAME);
-
-    // Read and parse the property.json file.
-    let property = parse_property_from_file(&property_path)?;
-
-    // Validate the property schema only if it is present.
-    let validation =
-        json_schema::ten_validate_property_json_file(&property_path);
-
-    if let Err(validation_err) = validation {
-        return Err(anyhow::anyhow!(
-            "Failed to validate {}, caused by {}",
-            property_path.display(),
-            validation_err
-        ));
+    if !property_path.exists() {
+        return Ok(None);
     }
 
-    Ok(property)
+    // Read and parse the property.json file.
+    let property =
+        parse_property_from_file(&property_path).with_context(|| {
+            format!("Failed to load {}.", property_path.display())
+        })?;
+
+    // Validate the property schema only if it is present.
+    json_schema::ten_validate_property_json_file(&property_path).with_context(
+        || format!("Failed to validate {}.", property_path.display()),
+    )?;
+
+    Ok(Some(property))
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::pkg_info::graph::msg_conversion::{
+        MsgConversionMode, MsgConversionType,
+    };
+
     use super::*;
     use std::fs::{self};
     use tempfile::tempdir;
@@ -271,5 +300,76 @@ mod tests {
             serde_json::from_str(json_data).unwrap();
 
         assert_eq!(saved_json, original_json);
+    }
+
+    #[test]
+    fn test_dump_property_without_localhost_app_in_graph() {
+        let json_data = include_str!("test_data_embed/property.json");
+        let property: Property = json_data.parse().unwrap();
+        assert!(property._ten.is_some());
+        let ten = property._ten.as_ref().unwrap();
+        let predefined_graphs = ten.predefined_graphs.as_ref().unwrap();
+        let nodes = &predefined_graphs.first().as_ref().unwrap().graph.nodes;
+        let node = nodes.first().unwrap();
+        assert_eq!(node.get_app_uri(), localhost());
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("property.json");
+        property.dump_property_to_file(&file_path).unwrap();
+
+        let saved_content = fs::read_to_string(file_path).unwrap();
+        eprintln!("{}", saved_content);
+        assert_eq!(saved_content.find(localhost().as_str()), None);
+    }
+
+    #[test]
+    fn test_dump_property_with_msg_conversion() {
+        let prop_str = include_str!(
+            "test_data_embed/dump_property_with_msg_conversion.json"
+        );
+        let property: Property = prop_str.parse().unwrap();
+        assert!(property._ten.is_some());
+
+        let ten = property._ten.as_ref().unwrap();
+        let predefined_graphs = ten.predefined_graphs.as_ref().unwrap();
+        let connections = &predefined_graphs
+            .first()
+            .as_ref()
+            .unwrap()
+            .graph
+            .connections
+            .as_ref()
+            .unwrap();
+        let connection = connections.first().unwrap();
+        let cmd = connection.cmd.as_ref().unwrap();
+        assert_eq!(cmd.len(), 1);
+
+        let cmd_dest = &cmd.first().unwrap().dest;
+        assert_eq!(cmd_dest.len(), 1);
+
+        let msg_conversion =
+            cmd_dest.first().unwrap().msg_conversion.as_ref().unwrap();
+        assert_eq!(
+            msg_conversion.msg.conversion_type,
+            MsgConversionType::PerProperty
+        );
+
+        let rules = &msg_conversion.msg.rules;
+        assert!(rules.keep_original.is_none());
+        assert_eq!(rules.rules.len(), 2);
+
+        let rule = rules.rules.first().unwrap();
+        assert_eq!(rule.conversion_mode, MsgConversionMode::FixedValue);
+        assert!(rule.original_path.is_none());
+        assert_eq!(rule.value.as_ref().unwrap(), "hello_mapping");
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("property.json");
+
+        property.dump_property_to_file(&file_path).unwrap();
+
+        let saved_content = fs::read_to_string(file_path).unwrap();
+        eprintln!("{}", saved_content);
+        assert!(saved_content.contains("msg_conversion"));
     }
 }

@@ -29,7 +29,8 @@ typedef enum TEN_AUDIO_FRAME_DATA_FMT {
 
 typedef struct ten_audio_frame_t ten_audio_frame_t;
 
-TEN_RUNTIME_API ten_shared_ptr_t *ten_audio_frame_create(void);
+TEN_RUNTIME_API ten_shared_ptr_t *ten_audio_frame_create(const char *name,
+                                                         ten_error_t *err);
 
 TEN_RUNTIME_API int64_t ten_audio_frame_get_timestamp(ten_shared_ptr_t *self);
 TEN_RUNTIME_API bool ten_audio_frame_set_timestamp(ten_shared_ptr_t *self,
@@ -45,8 +46,8 @@ TEN_RUNTIME_API bool ten_audio_frame_set_channel_layout(
     ten_shared_ptr_t *self, uint64_t channel_layout);
 
 TEN_RUNTIME_API bool ten_audio_frame_is_eof(ten_shared_ptr_t *self);
-TEN_RUNTIME_API bool ten_audio_frame_set_is_eof(ten_shared_ptr_t *self,
-                                                bool is_eof);
+TEN_RUNTIME_API bool ten_audio_frame_set_eof(ten_shared_ptr_t *self,
+                                             bool is_eof);
 
 TEN_RUNTIME_API int32_t
 ten_audio_frame_get_samples_per_channel(ten_shared_ptr_t *self);
@@ -72,10 +73,7 @@ ten_audio_frame_get_data_fmt(ten_shared_ptr_t *self);
 TEN_RUNTIME_API bool ten_audio_frame_set_data_fmt(
     ten_shared_ptr_t *self, TEN_AUDIO_FRAME_DATA_FMT data_fmt);
 
-TEN_RUNTIME_API uint8_t *ten_audio_frame_alloc_data(ten_shared_ptr_t *self,
-                                                    size_t size);
+TEN_RUNTIME_API uint8_t *ten_audio_frame_alloc_buf(ten_shared_ptr_t *self,
+                                                   size_t size);
 
-TEN_RUNTIME_API ten_buf_t *ten_audio_frame_peek_data(ten_shared_ptr_t *self);
-
-TEN_RUNTIME_API ten_shared_ptr_t *ten_audio_frame_create_from_json_string(
-    const char *json_str, ten_error_t *err);
+TEN_RUNTIME_API ten_buf_t *ten_audio_frame_peek_buf(ten_shared_ptr_t *self);

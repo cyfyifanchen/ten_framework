@@ -55,7 +55,6 @@ struct ten_extension_context_t {
   ten_extension_context_on_closed_func_t on_closed;
   void *on_closed_data;
 
-  ten_env_t *ten_env;
   ten_engine_t *engine;
 
   // 'state_requester_cmd' will be used in the following scenarios:
@@ -82,7 +81,7 @@ TEN_RUNTIME_PRIVATE_API void ten_extension_context_on_close(
 
 TEN_RUNTIME_PRIVATE_API ten_extension_info_t *
 ten_extension_context_get_extension_info_by_name(
-    ten_extension_context_t *self, const char *app_uri, const char *graph_name,
+    ten_extension_context_t *self, const char *app_uri, const char *graph_id,
     const char *extension_group_name, const char *extension_name);
 
 TEN_RUNTIME_PRIVATE_API bool ten_extension_context_start_extension_group(

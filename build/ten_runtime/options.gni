@@ -16,18 +16,13 @@ declare_args() {
   ten_enable_libwebsockets = true
 
   ten_enable_curl = true
-
-  ten_enable_package_manager = true
-  ten_enable_package_manager_publish = target_cpu != "arm64"
 }
 
 # ten_runtime binding
 declare_args() {
-  # If set, also build go binding
-  ten_enable_go_binding = is_mac || is_linux
-
-  # TODO: enable it on mac and win
-  ten_enable_python_binding = is_linux && target_cpu == "x64"
+  ten_enable_go_binding = true
+  ten_enable_python_binding = true
+  ten_enable_nodejs_binding = true
 }
 
 # ten_runtime extensions
@@ -52,12 +47,26 @@ declare_args() {
 declare_args() {
   # The go lint only depends on GO SDK which is platform independent, so only
   # one CI node is enough to run the lint.
-  ten_enable_go_lint = ten_enable_go_binding && is_linux && is_clang && is_debug
+  ten_enable_go_lint = false
+
+  # Whether to call apis in the ten_rust library from ten_runtime.
+  ten_enable_ten_rust_apis = true
+}
+
+declare_args() {
+  ten_enable_tests = true
+  ten_enable_unit_tests = true
+  ten_enable_smoke_tests = true
+  ten_enable_integration_tests = true
 }
 
 ten_runtime_common_defines = common_defines
 if (ten_enable_memory_check) {
   ten_runtime_common_defines += [ "TEN_ENABLE_MEMORY_CHECK" ]
+}
+
+if (ten_enable_ten_rust && ten_enable_ten_rust_apis) {
+  ten_runtime_common_defines += [ "TEN_ENABLE_TEN_RUST_APIS" ]
 }
 
 common_deps = []

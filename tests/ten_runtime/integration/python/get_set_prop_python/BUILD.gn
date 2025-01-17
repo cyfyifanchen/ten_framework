@@ -19,7 +19,7 @@ ten_package_test_prepare_app("get_set_prop_python_app") {
 
   replace_files_after_install_all = [ "get_set_prop_python_app/ten_packages/extension/default_extension_python/extension.py" ]
 
-  if (ten_enable_package_manager) {
+  if (ten_enable_ten_manager) {
     deps = [
       "//core/src/ten_manager",
       "//packages/core_apps/default_app_python:upload_default_app_python_to_server",
@@ -36,9 +36,6 @@ ten_package_test_prepare_auxiliary_resources("get_set_prop_python_test_files") {
     "__init__.py",
     "test_case.py",
   ]
-  if (enable_sanitizer) {
-    resources += [ "//tests/ten_runtime/integration/tools/use_asan_lib_marker=>use_asan_lib_marker" ]
-  }
 }
 
 group("get_set_prop_python") {

@@ -34,7 +34,8 @@ typedef enum TEN_PIXEL_FMT {
 
 typedef struct ten_video_frame_t ten_video_frame_t;
 
-TEN_RUNTIME_API ten_shared_ptr_t *ten_video_frame_create(void);
+TEN_RUNTIME_API ten_shared_ptr_t *ten_video_frame_create(const char *name,
+                                                         ten_error_t *err);
 
 TEN_RUNTIME_API int32_t ten_video_frame_get_width(ten_shared_ptr_t *self);
 TEN_RUNTIME_API bool ten_video_frame_set_width(ten_shared_ptr_t *self,
@@ -49,8 +50,8 @@ TEN_RUNTIME_API bool ten_video_frame_set_timestamp(ten_shared_ptr_t *self,
                                                    int64_t timestamp);
 
 TEN_RUNTIME_API bool ten_video_frame_is_eof(ten_shared_ptr_t *self);
-TEN_RUNTIME_API bool ten_video_frame_set_is_eof(ten_shared_ptr_t *self,
-                                                bool is_eof);
+TEN_RUNTIME_API bool ten_video_frame_set_eof(ten_shared_ptr_t *self,
+                                             bool is_eof);
 
 TEN_RUNTIME_API TEN_PIXEL_FMT
 ten_video_frame_get_pixel_fmt(ten_shared_ptr_t *self);
@@ -62,6 +63,3 @@ TEN_RUNTIME_API uint8_t *ten_video_frame_alloc_data(ten_shared_ptr_t *self,
                                                     size_t size);
 
 TEN_RUNTIME_API ten_buf_t *ten_video_frame_peek_data(ten_shared_ptr_t *self);
-
-TEN_RUNTIME_API ten_shared_ptr_t *ten_video_frame_create_from_json_string(
-    const char *json_str, ten_error_t *err);

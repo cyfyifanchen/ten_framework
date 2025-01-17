@@ -39,32 +39,23 @@ docker compose up
 Once the command is entered, you should see output similar to this:
 
 <pre class="language-bash" data-title=">_ Terminal"><code class="lang-bash">....
-Attaching to astra_agents_dev, astra_playground, ten_graph_designer
-astra_agents_dev    | >> run graph designer server
-astra_agents_dev    | cd agents && tman dev-server
-astra_agents_dev    | :-)  Starting server at http://0.0.0.0:49483
-astra_playground    |   ▲ Next.js 14.2.4
-astra_playground    |   - Local:        http://localhost:3000
-astra_playground    |   - Network:      http://0.0.0.0:3000
-astra_playground    |
-astra_playground    |  ✓ Starting...
-ten_graph_designer  |   ▲ Next.js 14.2.4
-ten_graph_designer  |   - Local:        http://localhost:3000
-ten_graph_designer  |   - Network:      http://0.0.0.0:3000
-ten_graph_designer  |
-ten_graph_designer  |  ✓ Starting...
-astra_playground    |  ✓ Ready in 394ms
-ten_graph_designer  |  ✓ Ready in 387ms
+Attaching to ten_agent_dev, ten_agent_playground
+ten_agent_dev         | cd agents && tman designer
+ten_agent_dev         | :-)  Starting server at http://0.0.0.0:49483
+ten_agent_playground  |   ▲ Next.js 14.2.4
+ten_agent_playground  |   - Local:        http://localhost:3000
+ten_agent_playground  |   - Network:      http://0.0.0.0:3000
+ten_agent_playground  |
+ten_agent_playground  |  ✓ Starting...
+ten_agent_playground  |  ✓ Ready in 429ms
 ...
 </code></pre>
 
 Now, we’ve got the following services running:
 
-• `astra_agents_dev` at `http://0.0.0.0:49483` (the backend server)
+• `ten_agent_dev` at `http://0.0.0.0:49483` (dev server)
 
-• `astra_playground` at `http://localhost:3000` (the frontend of TEN Agent)
-
-• `ten_graph_designer` at `http://localhost:3001` (the frontend of Graph Designer)
+• `ten_agent_playground` at `http://localhost:3000` (TEN Agent playground)
 
 ## 2. Enter the docker container
 
@@ -73,7 +64,7 @@ To work within the isolated environment, run the following command:
 {% code title=">_ Terminal" %}
 
 ```bash
-docker exec -it astra_agents_dev bash
+docker exec -it ten_agent_dev bash
 ```
 
 {% endcode %}
@@ -86,7 +77,7 @@ By running the following commands, an extension called `hello_world` will be cre
 {% tab title="Python" %}
 <pre class="language-bash" data-title=">_ Bash" data-overflow="wrap"><code class="lang-bash">cd agents
 
-<strong>tman install extension default_extension_python --template-mode --template-data package_name=hello_world --template-data class_name_prefix=HelloWorld
+<strong>tman install extension default_async_extension_python --template-mode --template-data package_name=hello_world --template-data class_name_prefix=HelloWorld
 </strong>
 </code></pre>
 {% endtab %}
@@ -111,27 +102,39 @@ By running the following commands, an extension called `hello_world` will be cre
 After running the command, the log will display something like this:
 
 <pre class="language-bash" data-title=">_ Bash"><code class="lang-bash">...
-Resolving packages...
-<strong>:-)  Install successfully in xxx seconds
-</strong>...
+  Creating manifest-lock.json...
++  Installing packages...
+  <strong>[00:00:01] [########################################]      11/11      Done</strong>
+                <strong>:-)  Install successfully in 20 seconds</strong>
+...
 </code></pre>
 
 ## 4. Adding API to the extension
 
-Navigate into the `hello_world` directory and open manifest.json. Add the API objects with `data_in` and `cmd_out`, which we will use shortly within the Graph Designer:
+Navigate into the `hello_world` directory and open manifest.json. Add the API objects with `data_in` and `cmd_out`:
 
 <pre class="language-json" data-title="./hello_world/manifest.json"><code class="lang-json">{
   "type": "extension",
   "name": "hello_world",
-  "version": "0.4.1",
-  "language": "python",
+  "version": "0.3.1",
   "dependencies": [
     {
       "type": "system",
-      "name": "rte_runtime_python",
-      "version": "0.4.1"
+      "name": "ten_runtime_python",
+      "version": "0.3.1"
     }
   ],
+  "package": {
+    "include": [
+      "manifest.json",
+      "property.json",
+      "BUILD.gn",
+      "**.tent",
+      "**.py",
+      "README.md",
+      "tests/**"
+    ]
+  },
   "api": {
 <strong>    "data_in": [
 </strong><strong>      {
@@ -164,7 +167,7 @@ Let's use `cd /app` command to go back to the root of the project, and run `make
 ```bash
 cd /app
 
-make build
+task use
 ```
 
 {% endcode %}
@@ -173,14 +176,8 @@ make build
 
 You don’t need to restart the server when you first build the agent. However, after making minor updates, if refreshing the page doesn’t apply the changes, you’ll need to restart the server in Docker to ensure the updates take effect.
 
-<figure><img src="../assets/gif/docker_restart_server.gif" alt=""><figcaption><p>Restart the server for astra_agents_dev</p></figcaption></figure>
+<figure><img src="../assets/gif/docker_restart_server.gif" alt=""><figcaption><p>Restart the server for ten_agent_dev</p></figcaption></figure>
 
-## 7. Verify the extension&#x20;
+## 7. Verify the extension
 
-Open `http://localhost:3001` in your browser. You should see `hello_world` in the left menu. Drag it to the canvas, and connect it to the `text_data` input and `flash` output.
-
-You see the green and red color indicting the possible routes of node connecting.&#x20;
-
-<figure><img src="../assets/gif/hello_world_python.gif" alt=""><figcaption><p>hello_world extension</p></figcaption></figure>
-
-Congratulations! You’ve successfully created your first `hello_world` extension, and it’s working seamlessly within the Graph Designer canvas.
+Congratulations! You’ve successfully created your first `hello_world` extension.

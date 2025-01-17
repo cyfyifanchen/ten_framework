@@ -211,9 +211,7 @@ void ten_connection_set_on_closed(ten_connection_t *self,
 }
 
 void ten_connection_send_msg(ten_connection_t *self, ten_shared_ptr_t *msg) {
-  // TEN_NOLINTNEXTLINE(thread-check)
-  // thread-check: This function is designed to be called in any threads.
-  TEN_ASSERT(self && ten_connection_check_integrity(self, false),
+  TEN_ASSERT(self && ten_connection_check_integrity(self, true),
              "Should not happen.");
 
   // The message sends to connection channel MUST have dest loc.
@@ -268,14 +266,12 @@ static void ten_connection_on_protocol_cleaned(ten_protocol_t *protocol) {
 
 void ten_connection_clean(ten_connection_t *self) {
   TEN_ASSERT(self, "Invalid argument.");
-  TEN_ASSERT(
-      self && ten_connection_check_integrity(self, true),
-      "Invalid use of connection %p. The connection belongs to the app "
-      "thread initially, and will be transferred to the engine thread "
-      "after the migration. But now (before the 'cleaning'), the "
-      "connection belongs to the app thread, and this function is "
-      "called in the app thread, so we can perform thread checking here.",
-      self);
+  // The connection belongs to the app thread initially, and will be transferred
+  // to the engine thread after the migration. But now (before the 'cleaning'),
+  // the connection belongs to the app thread, and this function is called in
+  // the app thread, so we can perform thread checking here.
+  TEN_ASSERT(self && ten_connection_check_integrity(self, true),
+             "Invalid use of connection %p.", self);
 
   TEN_ASSERT(self->attach_to == TEN_CONNECTION_ATTACH_TO_APP,
              "Invalid argument.");
@@ -393,14 +389,13 @@ void ten_connection_connect_to(ten_connection_t *self, const char *uri,
         "Should not happen.");
   }
 
-  if (self->protocol) {
-    bool is_connected =
-        ten_protocol_connect_to(self->protocol, uri, on_server_connected);
+  TEN_ASSERT(
+      self->protocol && ten_protocol_check_integrity(self->protocol, true),
+      "Should not happen.");
+  TEN_ASSERT(ten_protocol_role_is_communication(self->protocol),
+             "Should not happen.");
 
-    if (!is_connected && on_server_connected) {
-      on_server_connected(self->protocol, false);
-    }
-  }
+  ten_protocol_connect_to(self->protocol, uri, on_server_connected);
 }
 
 void ten_connection_attach_to_remote(ten_connection_t *self,
@@ -414,8 +409,6 @@ void ten_connection_attach_to_remote(ten_connection_t *self,
 
   ten_atomic_store(&self->attach_to, TEN_CONNECTION_ATTACH_TO_REMOTE);
   self->attached_target.remote = remote;
-
-  remote->connection = self;
 
   ten_connection_set_on_closed(self, ten_remote_on_connection_closed, remote);
 

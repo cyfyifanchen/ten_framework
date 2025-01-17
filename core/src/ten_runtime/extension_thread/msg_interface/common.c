@@ -18,9 +18,7 @@
 #include "include_internal/ten_runtime/extension_group/metadata.h"
 #include "include_internal/ten_runtime/extension_store/extension_store.h"
 #include "include_internal/ten_runtime/extension_thread/extension_thread.h"
-#include "include_internal/ten_runtime/msg/cmd_base/cmd_base.h"
 #include "include_internal/ten_runtime/msg/msg.h"
-#include "include_internal/ten_utils/log/log.h"
 #include "include_internal/ten_utils/value/value.h"
 #include "ten_runtime/app/app.h"
 #include "ten_runtime/msg/cmd_result/cmd_result.h"
@@ -59,10 +57,10 @@ static void ten_extension_thread_handle_in_msg_sync(
       self->extension_store, ten_string_get_raw_str(&dest_loc->extension_name),
       self->in_lock_mode ? false : true);
   if (!extension) {
-    ten_msg_dump(msg, NULL,
-                 "Failed to find destination extension %s for msg ^m in %s",
-                 ten_string_get_raw_str(&dest_loc->extension_name),
-                 ten_string_get_raw_str(&self->extension_group->name));
+    // ten_msg_dump(msg, NULL,
+    //              "Failed to find destination extension %s for msg ^m in %s",
+    //              ten_string_get_raw_str(&dest_loc->extension_name),
+    //              ten_string_get_raw_str(&self->extension_group->name));
 
     // Return a result, so that the sender can know what's going on.
     if (ten_msg_get_type(msg) == TEN_MSG_TYPE_CMD) {
@@ -87,8 +85,8 @@ static void ten_extension_thread_handle_in_msg_sync(
     return;
   } else {
     if (extension->extension_thread != self) {
-      ten_msg_dump(msg, NULL, "Unexpected msg ^m for extension %s",
-                   ten_string_get_raw_str(&extension->name));
+      // ten_msg_dump(msg, NULL, "Unexpected msg ^m for extension %s",
+      //              ten_string_get_raw_str(&extension->name));
 
       TEN_ASSERT(0, "Should not happen.");
     }
@@ -111,10 +109,10 @@ static void ten_extension_thread_handle_in_msg_task(void *self_, void *arg) {
     case TEN_EXTENSION_THREAD_STATE_INIT:
     case TEN_EXTENSION_THREAD_STATE_CREATING_EXTENSIONS:
 #if defined(_DEBUG)
-      ten_msg_dump(msg, NULL,
-                   "A message (^m) comes when extension thread (%p) is in "
-                   "state (%d)",
-                   self, ten_extension_thread_get_state(self));
+      // ten_msg_dump(msg, NULL,
+      //              "A message (^m) comes when extension thread (%p) is in "
+      //              "state (%d)",
+      //              self, ten_extension_thread_get_state(self));
 #endif
 
       // At this stage, the extensions have not been created yet, so any
@@ -250,7 +248,7 @@ void ten_extension_thread_dispatch_msg(ten_extension_thread_t *self,
   ten_app_t *app = engine->app;
   TEN_ASSERT(app && ten_app_check_integrity(app, false), "Should not happen.");
 
-  if (!ten_string_is_equal(&dest_loc->app_uri, ten_app_get_uri(app))) {
+  if (!ten_string_is_equal_c_str(&dest_loc->app_uri, ten_app_get_uri(app))) {
     TEN_ASSERT(!ten_string_is_empty(&dest_loc->app_uri), "Should not happen.");
 
     // Because the remote might be added or deleted at runtime, so ask the
@@ -260,9 +258,9 @@ void ten_extension_thread_dispatch_msg(ten_extension_thread_t *self,
   } else {
     if (
         // It means asking the current app to do something.
-        ten_string_is_empty(&dest_loc->graph_name) ||
+        ten_string_is_empty(&dest_loc->graph_id) ||
         // It means asking another engine in the same app to do something.
-        !ten_string_is_equal(&dest_loc->graph_name, &engine->graph_name)) {
+        !ten_string_is_equal(&dest_loc->graph_id, &engine->graph_id)) {
       // The message should not be handled in this engine, so ask the app to
       // handle this message.
 
@@ -282,7 +280,6 @@ void ten_extension_thread_dispatch_msg(ten_extension_thread_t *self,
         } else {
           // The message should be handled in the current extension thread, so
           // dispatch the message to the current extension thread.
-
           ten_extension_thread_handle_in_msg_sync(self, msg);
         }
       }

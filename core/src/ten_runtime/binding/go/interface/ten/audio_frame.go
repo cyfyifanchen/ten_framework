@@ -63,7 +63,7 @@ type AudioFrame interface {
 	GetLineSize() (int32, error)
 
 	IsEOF() (bool, error)
-	SetIsEOF(isEOF bool) error
+	SetEOF(isEOF bool) error
 }
 
 type audioFrame struct {
@@ -92,7 +92,7 @@ func NewAudioFrame(audioFrameName string) (AudioFrame, error) {
 			C.int(len(audioFrameName)),
 			&bridge,
 		)
-		err := withGoStatus(&apiStatus)
+		err := withCGoError(&apiStatus)
 		if err != nil {
 			return nil, err
 		}
@@ -115,7 +115,7 @@ func (p *audioFrame) SetTimestamp(timestamp int64) error {
 			p.getCPtr(),
 			C.int64_t(timestamp),
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 }
 func (p *audioFrame) GetTimestamp() (int64, error) {
@@ -125,7 +125,7 @@ func (p *audioFrame) GetTimestamp() (int64, error) {
 			p.getCPtr(),
 			&timestamp,
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 
 	if err != nil {
@@ -141,7 +141,7 @@ func (p *audioFrame) SetSampleRate(sampleRate int32) error {
 			p.getCPtr(),
 			C.int32_t(sampleRate),
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 }
 
@@ -152,7 +152,7 @@ func (p *audioFrame) GetSampleRate() (int32, error) {
 			p.getCPtr(),
 			&sampleRate,
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 
 	if err != nil {
@@ -168,7 +168,7 @@ func (p *audioFrame) SetChannelLayout(channelLayout uint64) error {
 			p.getCPtr(),
 			C.uint64_t(channelLayout),
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 }
 
@@ -179,7 +179,7 @@ func (p *audioFrame) GetChannelLayout() (uint64, error) {
 			p.getCPtr(),
 			&channelLayout,
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 
 	if err != nil {
@@ -195,7 +195,7 @@ func (p *audioFrame) SetSamplesPerChannel(samplesPerChannel int32) error {
 			p.getCPtr(),
 			C.int32_t(samplesPerChannel),
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 }
 
@@ -206,7 +206,7 @@ func (p *audioFrame) GetSamplesPerChannel() (int32, error) {
 			p.getCPtr(),
 			&samplesPerChannel,
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 
 	if err != nil {
@@ -222,7 +222,7 @@ func (p *audioFrame) SetBytesPerSample(bytesPerSample int32) error {
 			p.getCPtr(),
 			C.int32_t(bytesPerSample),
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 }
 
@@ -233,7 +233,7 @@ func (p *audioFrame) GetBytesPerSample() (int32, error) {
 			p.getCPtr(),
 			&bytesPerSample,
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 
 	if err != nil {
@@ -249,7 +249,7 @@ func (p *audioFrame) SetNumberOfChannels(numberOfChannels int32) error {
 			p.getCPtr(),
 			C.int32_t(numberOfChannels),
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 }
 
@@ -260,7 +260,7 @@ func (p *audioFrame) GetNumberOfChannels() (int32, error) {
 			p.getCPtr(),
 			&numberOfChannels,
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 
 	if err != nil {
@@ -276,7 +276,7 @@ func (p *audioFrame) SetDataFmt(dataFmt AudioFrameDataFmt) error {
 			p.getCPtr(),
 			C.uint32_t(dataFmt),
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 }
 
@@ -287,7 +287,7 @@ func (p *audioFrame) GetDataFmt() (AudioFrameDataFmt, error) {
 			p.getCPtr(),
 			&dataFmt,
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 
 	if err != nil {
@@ -303,7 +303,7 @@ func (p *audioFrame) SetLineSize(lineSize int32) error {
 			p.getCPtr(),
 			C.int32_t(lineSize),
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 }
 
@@ -314,7 +314,7 @@ func (p *audioFrame) GetLineSize() (int32, error) {
 			p.getCPtr(),
 			&lineSize,
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 
 	if err != nil {
@@ -334,7 +334,7 @@ func (p *audioFrame) AllocBuf(size int) error {
 			p.getCPtr(),
 			C.int(size),
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 
 	if err == nil {
@@ -357,7 +357,7 @@ func (p *audioFrame) GetBuf() ([]byte, error) {
 			C.int(p.size),
 		)
 
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 
 	if err != nil {
@@ -378,7 +378,7 @@ func (p *audioFrame) LockBuf() ([]byte, error) {
 			&bufSize,
 		)
 
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 
 	if err != nil {
@@ -402,7 +402,7 @@ func (p *audioFrame) UnlockBuf(buf *[]byte) error {
 			unsafe.Pointer(unsafe.SliceData(*buf)),
 		)
 
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 
 	if err == nil {
@@ -420,7 +420,7 @@ func (p *audioFrame) IsEOF() (bool, error) {
 			p.getCPtr(),
 			&isEOF,
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 
 	if err != nil {
@@ -430,12 +430,12 @@ func (p *audioFrame) IsEOF() (bool, error) {
 	return bool(isEOF), nil
 }
 
-func (p *audioFrame) SetIsEOF(isEOF bool) error {
+func (p *audioFrame) SetEOF(isEOF bool) error {
 	return withCGOLimiter(func() error {
-		apiStatus := C.ten_go_audio_frame_set_is_eof(
+		apiStatus := C.ten_go_audio_frame_set_eof(
 			p.getCPtr(),
 			C.bool(isEOF),
 		)
-		return withGoStatus(&apiStatus)
+		return withCGoError(&apiStatus)
 	})
 }

@@ -5,7 +5,11 @@
 // Refer to the "LICENSE" file in the root directory for more information.
 //
 #include "include_internal/ten_runtime/addon/addon_autoload.h"
+#include "include_internal/ten_runtime/addon/addon_manager.h"
+#include "include_internal/ten_runtime/addon/extension/extension.h"
+#include "include_internal/ten_runtime/addon/protocol/protocol.h"
 #include "include_internal/ten_runtime/app/app.h"
+#include "include_internal/ten_runtime/app/base_dir.h"
 #include "include_internal/ten_runtime/app/close.h"
 #include "include_internal/ten_runtime/app/endpoint.h"
 #include "include_internal/ten_runtime/app/engine_interface.h"
@@ -14,15 +18,21 @@
 #include "include_internal/ten_runtime/app/predefined_graph.h"
 #include "include_internal/ten_runtime/common/constant_str.h"
 #include "include_internal/ten_runtime/extension_group/builtin/builtin_extension_group.h"
+#include "include_internal/ten_runtime/metadata/manifest.h"
 #include "include_internal/ten_runtime/metadata/metadata.h"
 #include "include_internal/ten_runtime/metadata/metadata_info.h"
+#include "include_internal/ten_runtime/protocol/close.h"
+#include "include_internal/ten_runtime/protocol/protocol.h"
 #include "include_internal/ten_runtime/schema_store/store.h"
+#include "include_internal/ten_runtime/ten_env/log.h"
 #include "include_internal/ten_runtime/ten_env/metadata_cb.h"
 #include "include_internal/ten_runtime/ten_env/ten_env.h"
 #include "ten_runtime/app/app.h"
+#include "ten_runtime/protocol/protocol.h"
 #include "ten_runtime/ten_env/internal/on_xxx_done.h"
 #include "ten_runtime/ten_env/ten_env.h"
 #include "ten_utils/lib/error.h"
+#include "ten_utils/lib/string.h"
 #include "ten_utils/macro/check.h"
 
 static void ten_app_adjust_and_validate_property_on_configure_done(
@@ -53,62 +63,54 @@ done:
   }
 }
 
-static void ten_app_on_configure_done_internal(ten_app_t *self) {
-  TEN_ASSERT(self && ten_app_check_integrity(self, true) && self->loop,
+static void ten_app_start_auto_start_predefined_graph_and_trigger_on_init(
+    ten_app_t *self) {
+  TEN_ASSERT(self && ten_app_check_integrity(self, true), "Should not happen.");
+  TEN_ASSERT(self->ten_env && ten_env_check_integrity(self->ten_env, true),
              "Should not happen.");
 
   ten_error_t err;
   ten_error_init(&err);
 
-  bool rc = ten_handle_manifest_info_when_on_configure_done(
-      &self->manifest_info, ten_string_get_raw_str(ten_app_get_base_dir(self)),
-      &self->manifest, &err);
-  if (!rc) {
-    TEN_LOGW("Failed to load app manifest data, FATAL ERROR.");
-    exit(EXIT_FAILURE);
-  }
+  bool rc = ten_app_start_auto_start_predefined_graph(self, &err);
+  TEN_ASSERT(rc, "Should not happen, %s.", ten_error_errmsg(&err));
 
-  rc = ten_handle_property_info_when_on_configure_done(
-      &self->property_info, ten_string_get_raw_str(ten_app_get_base_dir(self)),
-      &self->property, &err);
-  if (!rc) {
-    TEN_LOGW("Failed to load app property data, FATAL ERROR.");
-    exit(EXIT_FAILURE);
-  }
+  ten_error_deinit(&err);
 
-  if (!ten_app_handle_ten_namespace_properties(self)) {
-    TEN_LOGW("App determine default prop failed! \n");
-  }
+  // Trigger on_init.
+  ten_app_on_init(self->ten_env);
+}
 
-  ten_metadata_init_schema_store(&self->manifest, &self->schema_store);
-  ten_app_adjust_and_validate_property_on_configure_done(self);
+static void ten_app_on_endpoint_protocol_created(ten_env_t *ten_env,
+                                                 ten_protocol_t *protocol,
+                                                 void *cb_data) {
+  TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
+             "Should not happen.");
 
-  if (ten_string_is_empty(&self->uri)) {
-    ten_string_copy_c_str(&self->uri, TEN_STR_LOCALHOST,
-                          strlen(TEN_STR_LOCALHOST));
-  }
+  ten_app_t *self = ten_env_get_attached_app(ten_env);
+  TEN_ASSERT(self && ten_app_check_integrity(self, true), "Should not happen.");
 
-  ten_addon_load_all(&err);
-
-  if (!ten_app_get_predefined_graphs_from_property(self)) {
+  if (!protocol) {
+    TEN_LOGE("Failed to create app endpoint protocol, FATAL ERROR.");
+    ten_app_close(self, NULL);
     return;
   }
 
-  // Create the protocol context store _BEFORE_ 'ten_app_create_endpoint()', the
-  // context data of the endpoint protocol will depend on the context store.
-  ten_app_create_protocol_context_store(self);
+  TEN_ASSERT(ten_protocol_check_integrity(protocol, true),
+             "Should not happen, %p.", protocol);
 
-  if (!ten_string_is_equal_c_str(&self->uri, TEN_STR_LOCALHOST)) {
-    // Create the app listening endpoint if specifying one.
-    if (!ten_app_create_endpoint(self, &self->uri)) {
-      ten_app_close(self, NULL);
-    }
+  self->endpoint_protocol = protocol;
+
+  ten_protocol_attach_to_app(self->endpoint_protocol, self);
+  ten_protocol_set_on_closed(self->endpoint_protocol,
+                             ten_app_on_protocol_closed, self);
+
+  if (!ten_app_endpoint_listen(self)) {
+    ten_app_close(self, NULL);
+    return;
   }
 
-  rc = ten_app_start_auto_start_predefined_graph(self, &err);
-  TEN_ASSERT(rc, "Should not happen.");
-
-  ten_error_deinit(&err);
+  ten_app_start_auto_start_predefined_graph_and_trigger_on_init(self);
 }
 
 void ten_app_on_configure_done(ten_env_t *ten_env) {
@@ -118,11 +120,90 @@ void ten_app_on_configure_done(ten_env_t *ten_env) {
 
   ten_app_t *self = ten_env_get_attached_app(ten_env);
   TEN_ASSERT(self && ten_app_check_integrity(self, true), "Should not happen.");
+  TEN_ASSERT(self->loop, "Should not happen.");
 
-  ten_app_on_configure_done_internal(self);
+  ten_error_t err;
+  ten_error_init(&err);
 
-  // Trigger on_init.
-  ten_app_on_init(ten_env);
+  bool rc = ten_handle_manifest_info_when_on_configure_done(
+      &self->manifest_info, ten_app_get_base_dir(self), &self->manifest, &err);
+  if (!rc) {
+    TEN_LOGW("Failed to load app manifest data, FATAL ERROR.");
+    exit(EXIT_FAILURE);
+  }
+
+  rc = ten_handle_property_info_when_on_configure_done(
+      &self->property_info, ten_app_get_base_dir(self), &self->property, &err);
+  if (!rc) {
+    TEN_LOGW("Failed to load app property data, FATAL ERROR.");
+    exit(EXIT_FAILURE);
+  }
+
+  if (!ten_app_handle_ten_namespace_properties(self)) {
+    TEN_LOGW("Failed to determine app default property.");
+  }
+
+  ten_metadata_init_schema_store(&self->manifest, &self->schema_store);
+  ten_app_adjust_and_validate_property_on_configure_done(self);
+
+  if (ten_string_is_empty(&self->uri)) {
+    ten_string_set_from_c_str(&self->uri, TEN_STR_LOCALHOST,
+                              strlen(TEN_STR_LOCALHOST));
+  }
+
+  ten_list_t extension_dependencies;
+  ten_list_t extension_group_dependencies;
+  ten_list_t protocol_dependencies;
+
+  ten_list_init(&extension_dependencies);
+  ten_list_init(&extension_group_dependencies);
+  ten_list_init(&protocol_dependencies);
+
+  ten_manifest_get_dependencies_type_and_name(
+      &self->manifest, &extension_dependencies, &extension_group_dependencies,
+      &protocol_dependencies);
+
+  ten_addon_load_all_from_app_base_dir(self, &extension_dependencies,
+                                       &extension_group_dependencies,
+                                       &protocol_dependencies, &err);
+  ten_addon_load_all_from_ten_package_base_dirs(self, &err);
+
+  ten_list_clear(&extension_dependencies);
+  ten_list_clear(&extension_group_dependencies);
+  ten_list_clear(&protocol_dependencies);
+
+  // Register all addons.
+  ten_addon_manager_t *manager = ten_addon_manager_get_instance();
+  ten_addon_register_ctx_t *register_ctx = ten_addon_register_ctx_create();
+  register_ctx->app = self;
+  ten_addon_manager_register_all_addons(manager, (void *)register_ctx);
+  ten_addon_register_ctx_destroy(register_ctx);
+
+  if (!ten_app_get_predefined_graphs_from_property(self)) {
+    goto error;
+  }
+
+  if (!ten_string_is_equal_c_str(&self->uri, TEN_STR_LOCALHOST) &&
+      !ten_string_starts_with(&self->uri, TEN_STR_CLIENT)) {
+    // Create the app listening endpoint protocol if specifying one.
+    rc = ten_addon_create_protocol_with_uri(
+        self->ten_env, ten_string_get_raw_str(&self->uri),
+        TEN_PROTOCOL_ROLE_LISTEN, ten_app_on_endpoint_protocol_created, NULL,
+        &err);
+    if (!rc) {
+      TEN_LOGW("Failed to create app endpoint protocol, %s.",
+               ten_error_errmsg(&err));
+      goto error;
+    }
+  } else {
+    ten_app_start_auto_start_predefined_graph_and_trigger_on_init(self);
+  }
+
+  return;
+
+error:
+  ten_error_deinit(&err);
+  ten_app_close(self, NULL);
 }
 
 void ten_app_on_configure(ten_env_t *ten_env) {
@@ -178,8 +259,27 @@ void ten_app_on_init_done(ten_env_t *ten_env) {
   ten_app_on_init_done_internal(self);
 }
 
+static void ten_app_unregister_addons_after_app_close(ten_app_t *self) {
+  TEN_ASSERT(self && ten_app_check_integrity(self, true), "Should not happen.");
+
+  const char *disabled = getenv("TEN_DISABLE_ADDON_UNREGISTER_AFTER_APP_CLOSE");
+  if (disabled && !strcmp(disabled, "true")) {
+    return;
+  }
+
+  ten_addon_unregister_all_extension();
+}
+
 void ten_app_on_deinit(ten_app_t *self) {
   TEN_ASSERT(self && ten_app_check_integrity(self, true), "Should not happen.");
+
+  // At the final stage of addon deinitialization, `ten_env_t::on_deinit_done`
+  // is required, which in turn depends on the runloop. Therefore, the addon
+  // deinitialization process must be performed before the app's runloop ends.
+  // After `app::on_deinit`, the app's runloop will be terminated soon, leaving
+  // no runloop within the TEN runtime. As a result, addon cleanup must be
+  // performed during the app's `on_deinit` phase.
+  ten_app_unregister_addons_after_app_close(self);
 
   // The world outside of TEN would do some operations after the app_run()
   // returns, so it's best to perform the on_deinit callback _before_ the
@@ -218,7 +318,7 @@ void ten_app_on_deinit_done(ten_env_t *ten_env) {
   self->state = TEN_APP_STATE_CLOSED;
   ten_mutex_unlock(self->state_lock);
 
-  TEN_LOGD("app::on_deinit_done().");
+  TEN_ENV_LOG_DEBUG_INTERNAL(ten_env, "app on_deinit_done().");
 
   ten_env_close(self->ten_env);
   ten_runloop_stop(self->loop);

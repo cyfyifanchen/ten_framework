@@ -3,14 +3,9 @@
     "uri": "msgpack://127.0.0.1:8001/",
     "predefined_graphs": [
       {
-        "name": "0",
+        "name": "default",
         "auto_start": false,
         "nodes": [
-          {
-            "type": "extension_group",
-            "name": "default_extension_group",
-            "addon": "default_extension_group"
-          },
           {
             "type": "extension",
             "name": "default_extension_cpp",

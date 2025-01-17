@@ -8,10 +8,10 @@
 
 #include "ten_runtime/ten_config.h"
 
-#include "include_internal/ten_runtime/common/closeable.h"
 #include "include_internal/ten_runtime/protocol/close.h"
 #include "ten_runtime/protocol/protocol.h"
 #include "ten_utils/container/list.h"
+#include "ten_utils/lib/mutex.h"
 #include "ten_utils/lib/ref.h"
 #include "ten_utils/lib/smart_ptr.h"
 #include "ten_utils/lib/string.h"
@@ -22,7 +22,6 @@ typedef struct ten_connection_t ten_connection_t;
 typedef struct ten_app_t ten_app_t;
 typedef struct ten_engine_t ten_engine_t;
 typedef struct ten_runloop_t ten_runloop_t;
-typedef struct ten_protocol_context_store_t ten_protocol_context_store_t;
 
 typedef enum TEN_PROTOCOL_ATTACH_TO {
   TEN_PROTOCOL_ATTACH_TO_INVALID,
@@ -75,8 +74,6 @@ typedef struct ten_protocol_t {
    */
   ten_sanitizer_thread_check_t thread_check;
 
-  ten_closeable_t closeable;
-
   ten_ref_t ref;
 
   ten_addon_host_t *addon_host;
@@ -126,9 +123,6 @@ typedef struct ten_protocol_t {
   ten_protocol_listen_func_t listen;
 
   // Used to react the connect_to request.
-  //
-  // TODO(Liu): What's the difference between the return value of this function
-  // and calling 'on_connected(this, true/false)'.
   ten_protocol_connect_to_func_t connect_to;
 
   // Used to react the migration to new runloop request.
@@ -141,13 +135,6 @@ typedef struct ten_protocol_t {
 
   // Used to handle the output TEN messages to the remote.
   ten_protocol_on_output_func_t on_output;
-
-  // This is the callback function when a client connects to this protocol.
-  ten_protocol_on_accepted_func_t on_accepted;
-
-  // This is the callback function when this protocol connected to the remote
-  // server.
-  ten_protocol_on_connected_func_t on_connected;
 
   // This is the callback function when this protocol is migrated to the new
   // runloop.
@@ -198,19 +185,6 @@ typedef struct ten_protocol_t {
   ten_mutex_t *out_lock;
   ten_list_t out_msgs;
   // @}
-
-  // This is just a _cache_ of the 'context_store' variable in ten_app_t struct,
-  // so these two pointers (ten_app_t::context_store &
-  // ten_protocol_t::context_store) are the same. The purpose of caching the
-  // pointer here is to enable the protocol implementations getting the
-  // context_store.
-  //
-  // The context_store itself is maintained on 'ten_app_t'. After creating the
-  // protocol, through 'ten_protocol_t::on_listen' and
-  // 'ten_protocol_t::connect_to', the 'context_store' in ten_app_t will be
-  // passed to the base protocol, so that the outside protocol implementation
-  // can get or create its own context through the context store.
-  ten_protocol_context_store_t *context_store;
 } ten_protocol_t;
 
 TEN_RUNTIME_PRIVATE_API bool ten_protocol_cascade_close_upward(
@@ -218,11 +192,11 @@ TEN_RUNTIME_PRIVATE_API bool ten_protocol_cascade_close_upward(
 
 TEN_RUNTIME_PRIVATE_API void ten_protocol_listen(
     ten_protocol_t *self, const char *uri,
-    ten_protocol_on_accepted_func_t on_accepted);
+    ten_protocol_on_client_accepted_func_t on_client_accepted);
 
-TEN_RUNTIME_PRIVATE_API bool ten_protocol_connect_to(
+TEN_RUNTIME_PRIVATE_API void ten_protocol_connect_to(
     ten_protocol_t *self, const char *uri,
-    ten_protocol_on_connected_func_t on_connected);
+    ten_protocol_on_server_connected_func_t on_server_connected);
 
 TEN_RUNTIME_PRIVATE_API void ten_protocol_migrate(
     ten_protocol_t *self, ten_engine_t *engine, ten_connection_t *connection,

@@ -13,10 +13,10 @@ use console::Emoji;
 use indicatif::HumanDuration;
 use semver::Version;
 
+use ten_rust::pkg_info::pkg_type::PkgType;
+
 use crate::log::tman_verbose_println;
 use crate::{config::TmanConfig, registry::delete_package};
-use ten_rust::pkg_info::pkg_identity::PkgIdentity;
-use ten_rust::pkg_info::pkg_type::PkgType;
 
 #[derive(Debug)]
 pub struct DeleteCommand {
@@ -28,7 +28,7 @@ pub struct DeleteCommand {
 
 pub fn create_sub_cmd(args_cfg: &crate::cmd_line::ArgsCfg) -> Command {
     Command::new("delete")
-        .about("Delete a package. For more detailed usage, run 'delete -h'")
+        .about("Delete a package")
         .after_help("This is a hidden privileged command, use it with caution.")
         .hide(true)
         .arg(
@@ -84,10 +84,8 @@ pub async fn execute_cmd(
 
     delete_package(
         tman_config,
-        &PkgIdentity {
-            pkg_type: PkgType::from_str(&command_data.package_type)?,
-            name: command_data.package_name,
-        },
+        PkgType::from_str(&command_data.package_type)?,
+        &command_data.package_name,
         &Version::parse(&command_data.version)?,
         &command_data.hash,
     )

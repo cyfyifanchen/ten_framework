@@ -19,23 +19,24 @@
 #include "ten_runtime/ten_env/ten_env.h"
 #include "ten_utils/lib/rwlock.h"
 
-#define TEN_GO_TEN_IS_ALIVE_REGION_BEGIN(ten_bridge, err_stmt)              \
-  do {                                                                      \
-    ten_rwlock_lock((ten_bridge)->lock, 1);                                 \
-    if (((ten_bridge)->c_ten_env == NULL) ||                                \
-        (((ten_bridge)->c_ten_env->attach_to != TEN_ENV_ATTACH_TO_ADDON) && \
-         ((ten_bridge)->c_ten_env_proxy == NULL))) {                        \
-      ten_rwlock_unlock((ten_bridge)->lock, 1);                             \
-      {                                                                     \
-        err_stmt                                                            \
-      }                                                                     \
-      goto ten_is_close;                                                    \
-    }                                                                       \
+#define TEN_GO_TEN_ENV_IS_ALIVE_REGION_BEGIN(ten_env_bridge, err_stmt) \
+  do {                                                                 \
+    ten_rwlock_lock((ten_env_bridge)->lock, 1);                        \
+    if (((ten_env_bridge)->c_ten_env == NULL) ||                       \
+        (((ten_env_bridge)->c_ten_env->attach_to !=                    \
+          TEN_ENV_ATTACH_TO_ADDON) &&                                  \
+         ((ten_env_bridge)->c_ten_env_proxy == NULL))) {               \
+      ten_rwlock_unlock((ten_env_bridge)->lock, 1);                    \
+      {                                                                \
+        err_stmt                                                       \
+      }                                                                \
+      goto ten_is_close;                                               \
+    }                                                                  \
   } while (0)
 
-#define TEN_GO_TEN_IS_ALIVE_REGION_END(ten_bridge) \
-  do {                                             \
-    ten_rwlock_unlock((ten_bridge)->lock, 1);      \
+#define TEN_GO_TEN_ENV_IS_ALIVE_REGION_END(ten_env_bridge) \
+  do {                                                     \
+    ten_rwlock_unlock((ten_env_bridge)->lock, 1);          \
   } while (0)
 
 typedef struct ten_go_ten_env_t {
@@ -56,6 +57,15 @@ typedef struct ten_go_callback_info_t {
   ten_go_handle_t callback_id;
 } ten_go_callback_info_t;
 
+extern void tenGoOnCmdResult(ten_go_handle_t ten_env_bridge,
+                             ten_go_handle_t cmd_result_bridge,
+                             ten_go_handle_t result_handler,
+                             ten_go_error_t cgo_error);
+
+extern void tenGoOnError(ten_go_handle_t ten_env_bridge,
+                         ten_go_handle_t error_handler,
+                         ten_go_error_t cgo_error);
+
 TEN_RUNTIME_PRIVATE_API ten_go_callback_info_t *ten_go_callback_info_create(
     ten_go_handle_t handler_id);
 
@@ -63,22 +73,23 @@ TEN_RUNTIME_PRIVATE_API void ten_go_callback_info_destroy(
     ten_go_callback_info_t *self);
 
 TEN_RUNTIME_PRIVATE_API void proxy_send_xxx_callback(
-    ten_extension_t *extension, ten_env_t *ten_env,
-    ten_shared_ptr_t *cmd_result, void *callback_info);
+    ten_env_t *ten_env, ten_shared_ptr_t *cmd_result, void *callback_info,
+    ten_error_t *err);
 
-ten_go_handle_t tenGoCreateTen(uintptr_t);
+ten_go_handle_t tenGoCreateTenEnv(uintptr_t);
 
-void tenGoDestroyTen(ten_go_handle_t go_ten);
+void tenGoDestroyTenEnv(ten_go_handle_t go_ten_env);
 
-void tenGoSetPropertyCallback(ten_go_handle_t ten, ten_go_handle_t handler,
+void tenGoSetPropertyCallback(ten_go_handle_t ten_env, ten_go_handle_t handler,
                               bool result);
 
-void tenGoGetPropertyCallback(ten_go_handle_t ten, ten_go_handle_t handler,
+void tenGoGetPropertyCallback(ten_go_handle_t ten_env, ten_go_handle_t handler,
                               ten_go_handle_t value);
 
-void tenGoOnAddonCreateExtensionDone(ten_go_handle_t ten, ten_go_handle_t addon,
+void tenGoOnAddonCreateExtensionDone(ten_go_handle_t ten_env,
+                                     ten_go_handle_t addon,
                                      ten_go_handle_t extension,
                                      ten_go_handle_t handler);
 
-void tenGoOnAddonDestroyExtensionDone(ten_go_handle_t ten,
+void tenGoOnAddonDestroyExtensionDone(ten_go_handle_t ten_env,
                                       ten_go_handle_t handler);
