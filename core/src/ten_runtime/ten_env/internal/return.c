@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -7,7 +7,11 @@
 #include "ten_runtime/ten_env/internal/return.h"
 
 #include "include_internal/ten_runtime/common/loc.h"
+#include "include_internal/ten_runtime/engine/engine.h"
+#include "include_internal/ten_runtime/engine/msg_interface/common.h"
 #include "include_internal/ten_runtime/extension/extension.h"
+#include "include_internal/ten_runtime/extension_group/extension_group.h"
+#include "include_internal/ten_runtime/extension_group/msg_interface/common.h"
 #include "include_internal/ten_runtime/extension_thread/extension_thread.h"
 #include "include_internal/ten_runtime/msg/cmd_base/cmd_base.h"
 #include "include_internal/ten_runtime/msg/msg.h"
@@ -45,11 +49,44 @@ static bool ten_env_return_result_internal(
     ten_cmd_base_set_seq_id(result_cmd, seq_id);
   }
 
-  ten_extension_t *extension = ten_env_get_attached_extension(self);
-  TEN_ASSERT(extension && ten_extension_check_integrity(extension, true),
-             "Invalid use of extension %p.", extension);
+  bool result = true;
 
-  bool result = ten_extension_handle_out_msg(extension, result_cmd, err);
+  switch (ten_env_get_attach_to(self)) {
+    case TEN_ENV_ATTACH_TO_EXTENSION: {
+      ten_extension_t *extension = ten_env_get_attached_extension(self);
+      TEN_ASSERT(extension && ten_extension_check_integrity(extension, true),
+                 "Invalid use of extension %p.", extension);
+
+      result = ten_extension_dispatch_msg(extension, result_cmd, err);
+      break;
+    }
+
+    case TEN_ENV_ATTACH_TO_EXTENSION_GROUP: {
+      ten_extension_group_t *extension_group =
+          ten_env_get_attached_extension_group(self);
+      TEN_ASSERT(extension_group &&
+                     ten_extension_group_check_integrity(extension_group, true),
+                 "Invalid use of extension_group %p.", extension_group);
+
+      result =
+          ten_extension_group_dispatch_msg(extension_group, result_cmd, err);
+      break;
+    }
+
+    case TEN_ENV_ATTACH_TO_ENGINE: {
+      ten_engine_t *engine = ten_env_get_attached_engine(self);
+      TEN_ASSERT(engine && ten_engine_check_integrity(engine, true),
+                 "Invalid use of engine %p.", engine);
+
+      result = ten_engine_dispatch_msg(engine, result_cmd);
+      break;
+    }
+
+    default:
+      TEN_ASSERT(0, "Handle this condition.");
+      break;
+  }
+
   if (result && error_handler) {
     // If the method synchronously returns true, it means that the callback must
     // be called.

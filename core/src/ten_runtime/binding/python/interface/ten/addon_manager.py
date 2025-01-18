@@ -1,5 +1,5 @@
 #
-# Copyright © 2024 Agora
+# Copyright © 2025 Agora
 # This file is part of TEN Framework, an open source project.
 # Licensed under the Apache License, Version 2.0, with certain conditions.
 # Refer to the "LICENSE" file in the root directory for more information.
@@ -9,9 +9,13 @@ import os
 import sys
 import importlib.util
 from glob import glob
-from typing import Callable, Dict, Type
+from typing import Callable, Dict, Type, Optional
+
 from .addon import Addon
-from libten_runtime_python import _register_addon_as_extension
+from libten_runtime_python import (
+    _register_addon_as_extension,
+    _unregister_all_addons_and_cleanup,
+)
 
 
 class _AddonManager:
@@ -103,6 +107,18 @@ class _AddonManager:
 
         cls._registry.clear()
 
+    @classmethod
+    def register_addon(cls, addon_name: str, register_ctx: object):
+        register_handler = cls._registry.pop(addon_name, None)
+        if register_handler:
+            try:
+                register_handler(register_ctx)
+                print(f"Successfully registered addon '{addon_name}'")
+            except Exception as e:
+                print(f"Error during registration of addon '{addon_name}': {e}")
+        else:
+            print(f"No register handler found for addon '{addon_name}'")
+
     @staticmethod
     def _set_register_handler(
         addon_name: str,
@@ -133,7 +149,7 @@ class _AddonManager:
         )
 
 
-def register_addon_as_extension(name: str, base_dir: str | None = None):
+def register_addon_as_extension(name: str, base_dir: Optional[str] = None):
     def decorator(cls: Type[Addon]) -> Type[Addon]:
         # Resolve base_dir.
         if base_dir is None:
@@ -170,3 +186,7 @@ def register_addon_as_extension(name: str, base_dir: str | None = None):
         return cls
 
     return decorator
+
+
+def unregister_all_addons_and_cleanup() -> None:
+    _unregister_all_addons_and_cleanup()

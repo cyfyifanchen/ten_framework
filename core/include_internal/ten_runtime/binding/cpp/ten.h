@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -33,8 +33,7 @@
 #include "ten_runtime/binding/cpp/detail/msg/data.h"  // IWYU pragma: export
 #include "ten_runtime/binding/cpp/detail/msg/msg.h"   // IWYU pragma: export
 #include "ten_runtime/binding/cpp/detail/msg/video_frame.h"  // IWYU pragma: export
-#include "ten_runtime/binding/cpp/detail/ten_env.h"       // IWYU pragma: export
-#include "ten_runtime/binding/cpp/detail/ten_env_impl.h"  // IWYU pragma: export
+#include "ten_runtime/binding/cpp/detail/ten_env.h"  // IWYU pragma: export
 #include "ten_runtime/binding/cpp/detail/ten_env_proxy.h"  // IWYU pragma: export
 #include "ten_runtime/binding/cpp/detail/test/env_tester.h"  // IWYU pragma: export
 #include "ten_runtime/binding/cpp/detail/test/env_tester_proxy.h"  // IWYU pragma: export

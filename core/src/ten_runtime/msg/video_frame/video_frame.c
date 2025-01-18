@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -54,14 +54,14 @@ int32_t ten_raw_video_frame_get_height(ten_video_frame_t *self) {
   return ten_value_get_int32(&self->height, NULL);
 }
 
-static ten_buf_t *ten_raw_video_frame_peek_data(ten_video_frame_t *self) {
+static ten_buf_t *ten_raw_video_frame_peek_buf(ten_video_frame_t *self) {
   TEN_ASSERT(self, "Should not happen.");
   return ten_value_peek_buf(&self->data);
 }
 
-ten_buf_t *ten_video_frame_peek_data(ten_shared_ptr_t *self) {
+ten_buf_t *ten_video_frame_peek_buf(ten_shared_ptr_t *self) {
   TEN_ASSERT(self, "Should not happen.");
-  return ten_raw_video_frame_peek_data(ten_shared_ptr_get_data(self));
+  return ten_raw_video_frame_peek_buf(ten_shared_ptr_get_data(self));
 }
 
 TEN_PIXEL_FMT ten_raw_video_frame_get_pixel_fmt(ten_video_frame_t *self) {

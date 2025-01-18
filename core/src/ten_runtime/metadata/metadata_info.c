@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -8,7 +8,7 @@
 
 #include <stdbool.h>
 
-#include "include_internal/ten_runtime/addon/addon.h"
+#include "include_internal/ten_runtime/addon/addon_host.h"
 #include "include_internal/ten_runtime/app/app.h"
 #include "include_internal/ten_runtime/app/base_dir.h"
 #include "include_internal/ten_runtime/extension/base_dir.h"
@@ -99,7 +99,7 @@ static ten_string_t *ten_metadata_info_filename_to_absolute_path(
       const char *base_dir =
           ten_app_get_base_dir(ten_env_get_attached_app(self->belonging_to));
       if (base_dir) {
-        path = ten_string_create_from_c_str(base_dir, strlen(base_dir));
+        path = ten_string_create_from_c_str(base_dir);
       }
       break;
     }
@@ -108,7 +108,7 @@ static ten_string_t *ten_metadata_info_filename_to_absolute_path(
       const char *base_dir = ten_extension_group_get_base_dir(
           ten_env_get_attached_extension_group(self->belonging_to));
       if (base_dir) {
-        path = ten_string_create_from_c_str(base_dir, strlen(base_dir));
+        path = ten_string_create_from_c_str(base_dir);
       }
       break;
     }
@@ -117,7 +117,7 @@ static ten_string_t *ten_metadata_info_filename_to_absolute_path(
       const char *base_dir = ten_extension_get_base_dir(
           ten_env_get_attached_extension(self->belonging_to));
       if (base_dir) {
-        path = ten_string_create_from_c_str(base_dir, strlen(base_dir));
+        path = ten_string_create_from_c_str(base_dir);
       }
       break;
     }
@@ -126,7 +126,7 @@ static ten_string_t *ten_metadata_info_filename_to_absolute_path(
       const char *base_dir = ten_addon_host_get_base_dir(
           ten_env_get_attached_addon(self->belonging_to));
       if (base_dir) {
-        path = ten_string_create_from_c_str(base_dir, strlen(base_dir));
+        path = ten_string_create_from_c_str(base_dir);
       }
       break;
     }

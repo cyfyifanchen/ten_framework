@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -7,6 +7,7 @@
 #include "include_internal/ten_runtime/protocol/integrated/protocol_integrated.h"
 
 #include "include_internal/ten_runtime/addon/addon.h"
+#include "include_internal/ten_runtime/addon/addon_host.h"
 #include "include_internal/ten_runtime/addon/protocol/protocol.h"
 #include "include_internal/ten_runtime/app/app.h"
 #include "include_internal/ten_runtime/app/migration.h"
@@ -24,7 +25,6 @@
 #include "include_internal/ten_runtime/remote/remote.h"
 #include "include_internal/ten_runtime/ten_env/ten_env.h"
 #include "include_internal/ten_utils/log/log.h"
-#include "ten_runtime/protocol/close.h"
 #include "ten_utils/container/list.h"
 #include "ten_utils/io/runloop.h"
 #include "ten_utils/io/stream.h"
@@ -161,8 +161,10 @@ static void ten_stream_on_data(ten_stream_t *stream, void *data, int size) {
     // the stream. The 'ten_protocol_close_task_()' will the last task related
     // to the connection.
     ten_ref_inc_ref(&base_protocol->ref);
-    ten_runloop_post_task_tail(ten_connection_get_attached_runloop(connection),
-                               ten_protocol_close_task, base_protocol, NULL);
+    int rc = ten_runloop_post_task_tail(
+        ten_connection_get_attached_runloop(connection),
+        ten_protocol_close_task, base_protocol, NULL);
+    TEN_ASSERT(!rc, "Should not happen.");
   } else if (size > 0) {
     ten_list_t msgs = TEN_LIST_INIT_VAL;
 
@@ -449,7 +451,7 @@ static void ten_protocol_integrated_on_output_async(
                  ten_protocol_role_is_communication(protocol),
              "Should not happen.");
 
-  TEN_UNUSED int rc = ten_mutex_lock(protocol->out_lock);
+  int rc = ten_mutex_lock(protocol->out_lock);
   TEN_ASSERT(!rc, "Should not happen.");
 
   ten_list_concat(&protocol->out_msgs, msgs);
@@ -465,8 +467,9 @@ static void ten_protocol_integrated_on_output_async(
   ten_runloop_t *loop = ten_protocol_get_attached_runloop(protocol);
   TEN_ASSERT(loop, "Should not happen.");
 
-  ten_runloop_post_task_tail(loop, ten_protocol_integrated_on_output_task, self,
-                             NULL);
+  rc = ten_runloop_post_task_tail(loop, ten_protocol_integrated_on_output_task,
+                                  self, NULL);
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 static void ten_protocol_integrated_on_server_finally_connected(

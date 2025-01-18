@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -18,11 +18,13 @@
 #include "include_internal/ten_runtime/engine/engine.h"
 #include "include_internal/ten_runtime/engine/internal/migration.h"
 #include "include_internal/ten_runtime/engine/msg_interface/common.h"
-#include "include_internal/ten_runtime/msg/cmd_base/cmd/stop_graph/cmd.h"
 #include "include_internal/ten_runtime/msg/cmd_base/cmd_base.h"
 #include "include_internal/ten_runtime/msg/msg.h"
 #include "include_internal/ten_runtime/protocol/protocol.h"
 #include "ten_runtime/app/app.h"
+#include "ten_runtime/common/status_code.h"
+#include "ten_runtime/msg/cmd/close_app/cmd.h"
+#include "ten_runtime/msg/cmd/stop_graph/cmd.h"
 #include "ten_runtime/msg/cmd_result/cmd_result.h"
 #include "ten_runtime/msg/msg.h"
 #include "ten_utils/container/list.h"
@@ -226,8 +228,10 @@ static bool ten_app_handle_stop_graph_cmd(ten_app_t *self,
              "Should not happen.");
   TEN_ASSERT(ten_msg_get_dest_cnt(cmd) == 1, "Should not happen.");
 
-  ten_string_t *dest_graph_id = ten_cmd_stop_graph_get_graph_id(cmd);
-  TEN_ASSERT(!ten_string_is_empty(dest_graph_id), "Should not happen.");
+  const char *dest_graph_id = ten_cmd_stop_graph_get_graph_id(cmd);
+  // If the app needs to handle the `stop_graph` command, it means the app must
+  // know the target's graph ID.
+  TEN_ASSERT(strlen(dest_graph_id), "Should not happen.");
 
   ten_engine_t *dest_engine = NULL;
 
@@ -235,7 +239,7 @@ static bool ten_app_handle_stop_graph_cmd(ten_app_t *self,
   ten_list_foreach (&self->engines, iter) {
     ten_engine_t *engine = ten_ptr_listnode_get(iter.node);
 
-    if (ten_string_is_equal(&engine->graph_id, dest_graph_id)) {
+    if (ten_string_is_equal_c_str(&engine->graph_id, dest_graph_id)) {
       dest_engine = engine;
       break;
     }
@@ -272,8 +276,45 @@ static bool ten_app_handle_stop_graph_cmd(ten_app_t *self,
   return true;
 }
 
-bool ten_app_handle_out_msg(ten_app_t *self, ten_shared_ptr_t *msg,
-                            ten_error_t *err) {
+/**
+ * @return true if this function handles @param cmd, false otherwise.
+ */
+static bool ten_app_handle_cmd_result(ten_app_t *self, ten_shared_ptr_t *cmd,
+                                      ten_error_t *err) {
+  TEN_ASSERT(self && ten_app_check_integrity(self, true), "Should not happen.");
+  TEN_ASSERT(cmd && ten_cmd_base_check_integrity(cmd), "Should not happen.");
+
+  TEN_STATUS_CODE status_code = ten_cmd_result_get_status_code(cmd);
+  bool is_auto_start_predefined_graph_cmd_result = false;
+
+  // Verify whether the received command result corresponds to a previously sent
+  // `start_graph` command for the `auto_start` predefined graph.
+  ten_list_foreach (&self->predefined_graph_infos, iter) {
+    ten_predefined_graph_info_t *predefined_graph_info =
+        (ten_predefined_graph_info_t *)ten_ptr_listnode_get(iter.node);
+
+    if (ten_string_is_equal_c_str(&predefined_graph_info->start_graph_cmd_id,
+                                  ten_cmd_base_get_cmd_id(cmd))) {
+      TEN_ASSERT(predefined_graph_info->auto_start, "Should not happen.");
+      is_auto_start_predefined_graph_cmd_result = true;
+    }
+  }
+
+  if (is_auto_start_predefined_graph_cmd_result &&
+      status_code == TEN_STATUS_CODE_ERROR) {
+    // If auto-starting the predefined graph fails, gracefully close the app.
+    ten_shared_ptr_t *close_app_cmd = ten_cmd_close_app_create();
+    ten_msg_clear_and_set_dest(close_app_cmd,
+                               ten_string_get_raw_str(&self->uri), NULL, NULL,
+                               NULL, err);
+    ten_env_send_cmd(self->ten_env, close_app_cmd, NULL, NULL, err);
+  }
+
+  return is_auto_start_predefined_graph_cmd_result;
+}
+
+bool ten_app_dispatch_msg(ten_app_t *self, ten_shared_ptr_t *msg,
+                          ten_error_t *err) {
   // The source of the out message is the current app.
   ten_msg_set_src_to_app(msg, self);
 
@@ -330,6 +371,11 @@ bool ten_app_handle_in_msg(ten_app_t *self, ten_connection_t *connection,
 
     case TEN_MSG_TYPE_CMD_STOP_GRAPH:
       return ten_app_handle_stop_graph_cmd(self, msg, err);
+
+    case TEN_MSG_TYPE_CMD_RESULT:
+      if (!ten_app_handle_cmd_result(self, msg, err)) {
+        return ten_app_handle_msg_default_handler(self, connection, msg, err);
+      }
 
     default:
       return ten_app_handle_msg_default_handler(self, connection, msg, err);
@@ -415,8 +461,9 @@ static void ten_app_handle_in_msgs_async(ten_app_t *self) {
                  ten_app_check_integrity(self, false),
              "Should not happen.");
 
-  ten_runloop_post_task_tail(ten_app_get_attached_runloop(self),
-                             ten_app_handle_in_msgs_task, self, NULL);
+  int rc = ten_runloop_post_task_tail(ten_app_get_attached_runloop(self),
+                                      ten_app_handle_in_msgs_task, self, NULL);
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 void ten_app_push_to_in_msgs_queue(ten_app_t *self, ten_shared_ptr_t *msg) {

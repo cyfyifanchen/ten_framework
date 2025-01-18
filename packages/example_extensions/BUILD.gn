@@ -13,6 +13,7 @@ group("example_extensions") {
 
     if (ten_enable_ffmpeg_extensions) {
       deps += [
+        "ffmpeg_client",
         "ffmpeg_demuxer",
         "ffmpeg_muxer",
       ]
@@ -22,6 +23,13 @@ group("example_extensions") {
       deps += [
         "aio_http_server_python",
         "pil_demo_python",
+      ]
+    }
+
+    if (ten_enable_nodejs_binding) {
+      deps += [
+        "http_server_extension_nodejs",
+        "websocket_server_nodejs",
       ]
     }
   }

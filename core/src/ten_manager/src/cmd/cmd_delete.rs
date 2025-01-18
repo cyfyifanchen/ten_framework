@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -58,8 +58,8 @@ pub fn create_sub_cmd(args_cfg: &crate::cmd_line::ArgsCfg) -> Command {
 
 pub fn parse_sub_cmd(
     sub_cmd_args: &ArgMatches,
-) -> crate::cmd::cmd_delete::DeleteCommand {
-    crate::cmd::cmd_delete::DeleteCommand {
+) -> Result<crate::cmd::cmd_delete::DeleteCommand> {
+    Ok(crate::cmd::cmd_delete::DeleteCommand {
         package_type: sub_cmd_args
             .get_one::<String>("PACKAGE_TYPE")
             .cloned()
@@ -70,7 +70,7 @@ pub fn parse_sub_cmd(
             .unwrap(),
         version: sub_cmd_args.get_one::<String>("VERSION").cloned().unwrap(),
         hash: sub_cmd_args.get_one::<String>("HASH").cloned().unwrap(),
-    }
+    })
 }
 
 pub async fn execute_cmd(

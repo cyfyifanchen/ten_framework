@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -332,6 +332,7 @@ int main() {
 
   if (!elf_zlib_inflate_table(&codes[0], 288, &table[0], &table[0])) {
     fprintf(stderr, "elf_zlib_inflate_table failed\n");
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
     exit(EXIT_FAILURE);
   }
 
@@ -360,6 +361,7 @@ int main() {
 
   if (!elf_zlib_inflate_table(&codes[0], 32, &table[0], &table[0])) {
     fprintf(stderr, "elf_zlib_inflate_table failed\n");
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
     exit(EXIT_FAILURE);
   }
 

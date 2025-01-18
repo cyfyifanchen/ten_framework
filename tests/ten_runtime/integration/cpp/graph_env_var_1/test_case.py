@@ -17,7 +17,7 @@ def test_graph_env_var_1_app():
     my_env = os.environ.copy()
 
     app_root_path = os.path.join(base_path, "graph_env_var_1_app")
-    source_pkg_name = "graph_env_var_1_app_source"
+    app_dir_name = "graph_env_var_1_app"
     app_language = "cpp"
 
     build_config_args = build_config.parse_build_config(
@@ -25,14 +25,13 @@ def test_graph_env_var_1_app():
     )
 
     if build_config_args.ten_enable_integration_tests_prebuilt is False:
-        print('Assembling and building package "{}".'.format(source_pkg_name))
+        print('Assembling and building package "{}".'.format(app_dir_name))
 
         rc = build_pkg.prepare_and_build_app(
             build_config_args,
             root_dir,
             base_path,
-            app_root_path,
-            source_pkg_name,
+            app_dir_name,
             app_language,
         )
         if rc != 0:
@@ -42,6 +41,7 @@ def test_graph_env_var_1_app():
         os.path.join(root_dir, "ten_manager/bin/tman"),
         "--config-file",
         os.path.join(root_dir, "tests/local_registry/config.json"),
+        "--yes",
         "install",
     ]
 
@@ -68,7 +68,7 @@ def test_graph_env_var_1_app():
         )
         server_cmd = os.path.join(
             base_path,
-            "graph_env_var_1_app/bin/graph_env_var_1_app_source.exe",
+            "graph_env_var_1_app/bin/graph_env_var_1_app.exe",
         )
         client_cmd = os.path.join(base_path, "graph_env_var_1_app_client.exe")
     elif sys.platform == "darwin":
@@ -78,7 +78,7 @@ def test_graph_env_var_1_app():
             "graph_env_var_1_app/ten_packages/system/ten_runtime/lib",
         )
         server_cmd = os.path.join(
-            base_path, "graph_env_var_1_app/bin/graph_env_var_1_app_source"
+            base_path, "graph_env_var_1_app/bin/graph_env_var_1_app"
         )
         client_cmd = os.path.join(base_path, "graph_env_var_1_app_client")
     else:
@@ -88,7 +88,7 @@ def test_graph_env_var_1_app():
             "graph_env_var_1_app/ten_packages/system/ten_runtime/lib",
         )
         server_cmd = os.path.join(
-            base_path, "graph_env_var_1_app/bin/graph_env_var_1_app_source"
+            base_path, "graph_env_var_1_app/bin/graph_env_var_1_app"
         )
         client_cmd = os.path.join(base_path, "graph_env_var_1_app_client")
 
@@ -101,6 +101,7 @@ def test_graph_env_var_1_app():
                 "graph_env_var_1_app/ten_packages/system/ten_runtime/lib/libasan.so",
             )
             if os.path.exists(libasan_path):
+                print("Using AddressSanitizer library.")
                 my_env["LD_PRELOAD"] = libasan_path
 
     my_env["TEST_ENV_VAR"] = "set_from_real_env_var"
@@ -149,8 +150,8 @@ def test_graph_env_var_1_app():
     assert client_rc == 0, f"Client exited with code {client_rc}"
 
     if build_config_args.ten_enable_integration_tests_prebuilt is False:
-        source_root_path = os.path.join(base_path, source_pkg_name)
+        source_root_path = os.path.join(base_path, app_dir_name)
 
         # Testing complete. If builds are only created during the testing phase,
-        # we  can clear the build results to save disk space.
+        # we can clear the build results to save disk space.
         build_pkg.cleanup(source_root_path, app_root_path)

@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -54,6 +54,13 @@ PyObject *ten_py_addon_manager_register_addon_as_extension(PyObject *self,
   py_addon->c_addon_host = c_addon_host;
 
   Py_INCREF(py_addon_object);  // Ensure the object is kept alive.
+
+  Py_RETURN_NONE;
+}
+
+PyObject *ten_py_unregister_all_addons_and_cleanup(PyObject *self,
+                                                   PyObject *args) {
+  ten_unregister_all_addons_and_cleanup();
 
   Py_RETURN_NONE;
 }

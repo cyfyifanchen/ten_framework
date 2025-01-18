@@ -6,10 +6,14 @@
       "enum": [
         "app",
         "extension",
-        "extension_group",
         "system",
-        "protocol"
+        "protocol",
+        "addon_loader"
       ]
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1
     },
     "os": {
       "type": "string",
@@ -69,24 +73,40 @@
     "dependencies": {
       "type": "array",
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "type",
-          "name",
-          "version"
-        ],
-        "properties": {
-          "type": {
-            "$ref": "#/$defs/packageType"
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": {
+                "$ref": "#/$defs/path"
+              }
+            }
           },
-          "name": {
-            "$ref": "#/$defs/alphanumericCharacters"
-          },
-          "version": {
-            "$ref": "#/$defs/versionRequirement"
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "name",
+              "version"
+            ],
+            "properties": {
+              "type": {
+                "$ref": "#/$defs/packageType"
+              },
+              "name": {
+                "$ref": "#/$defs/alphanumericCharacters"
+              },
+              "version": {
+                "$ref": "#/$defs/versionRequirement"
+              }
+            }
           }
-        }
+        ]
       }
     },
     "valueType": {
@@ -526,14 +546,14 @@
       {
         "properties": {
           "type": {
-            "const": "extension_group"
+            "const": "protocol"
           }
         }
       },
       {
         "properties": {
           "type": {
-            "const": "protocol"
+            "const": "addon_loader"
           }
         }
       }

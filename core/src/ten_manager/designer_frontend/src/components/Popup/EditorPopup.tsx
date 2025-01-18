@@ -1,15 +1,18 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
 //
 import React, { useEffect, useState, useContext } from "react";
 import Editor from "@monaco-editor/react";
+import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 import Popup from "@/components/Popup/Popup";
-import { getFileContent, saveFileContent } from "@/api/api";
+import { getFileContent, putFileContent } from "@/api/services/fileSystem";
 import { ThemeProviderContext } from "@/components/theme-context";
+import { Button } from "@/components/ui/Button";
 
 const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 400;
@@ -40,20 +43,26 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  const { t } = useTranslation();
+
   return (
     <Popup
-      title="Confirmation"
+      title={t("action.confirm")}
       onClose={onCancel}
       preventFocusSteal={true}
       resizable={false}
-      initialWidth={400}
-      initialHeight={200}
+      initialWidth={288}
+      initialHeight={180}
     >
-      <div className="p-5 text-center">
-        <p>{message}</p>
-        <div className="mt-5 flex justify-around">
-          <button onClick={onCancel}>Cancel</button>
-          <button onClick={onConfirm}>Ok</button>
+      <div className="flex flex-col items-center justify-center h-full mx-auto">
+        <p className="text-sm text-foreground">{message}</p>
+        <div className="flex items-center gap-4 mt-6 w-full justify-end">
+          <Button variant="outline" size="sm" onClick={onCancel}>
+            {t("action.cancel")}
+          </Button>
+          <Button variant="default" size="sm" onClick={onConfirm}>
+            {t("action.ok")}
+          </Button>
         </div>
       </div>
     </Popup>
@@ -62,9 +71,10 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
 const EditorPopup: React.FC<EditorPopupProps> = ({ data, onClose }) => {
   const [fileContent, setFileContent] = useState(data.content);
-
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingAction, setPendingAction] = useState<null | (() => void)>(null);
+
+  const { t } = useTranslation();
 
   // Fetch the specified file content from the backend.
   useEffect(() => {
@@ -74,6 +84,7 @@ const EditorPopup: React.FC<EditorPopupProps> = ({ data, onClose }) => {
         setFileContent(respData.content);
       } catch (error) {
         console.error("Failed to fetch file content:", error);
+        toast.error("Failed to fetch file content");
       }
     };
 
@@ -82,12 +93,16 @@ const EditorPopup: React.FC<EditorPopupProps> = ({ data, onClose }) => {
 
   const saveFile = async (content: string) => {
     try {
-      await saveFileContent(data.url, content);
-      console.log("File saved successfully");
+      await putFileContent(data.url, { content });
+      console.log(t("toast.saveFileSuccess"));
+      toast.success(t("toast.saveFileSuccess"));
       // We can add UI prompts, such as displaying a success notification.
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to save file content:", error);
-      // We can add UI prompts, such as popping up an error notification.
+      toast.error(t("toast.saveFileFailed"), {
+        description:
+          error instanceof Error ? error.message : t("toast.saveFileFailed"),
+      });
     }
   };
 
@@ -114,6 +129,7 @@ const EditorPopup: React.FC<EditorPopupProps> = ({ data, onClose }) => {
         resizable={true}
         initialWidth={DEFAULT_WIDTH}
         initialHeight={DEFAULT_HEIGHT}
+        contentClassName="p-0"
       >
         <div className="p-0 box-border flex flex-col w-full h-full">
           <Editor
@@ -127,8 +143,44 @@ const EditorPopup: React.FC<EditorPopupProps> = ({ data, onClose }) => {
             }}
             onChange={(value) => setFileContent(value || "")}
             onMount={(editor) => {
-              editor.focus(); // Set the keyboard focus to the editor.
+              // --- set context menu actions ---
+              // reference: https://github.com/microsoft/monaco-editor/issues/1280#issuecomment-2420136963
+              const keepIds = [
+                "editor.action.clipboardCopyAction",
+                "editor.action.clipboardCutAction",
+                "editor.action.clipboardPasteAction",
+                "editor.action.formatDocument",
+                "vs.editor.ICodeEditor:1:save-file",
+                "vs.actions.separator",
+              ];
+              const contextmenu = editor.getContribution(
+                "editor.contrib.contextmenu"
+              );
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const realMethod = (contextmenu as any)._getMenuActions;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (contextmenu as any)._getMenuActions = function (...args: any[]) {
+                const items = realMethod.apply(contextmenu, args);
+                const filteredItems = items.filter(function (item: {
+                  id: string;
+                }) {
+                  return keepIds.includes(item.id);
+                });
+                // Remove separator if it's the last item
+                if (
+                  filteredItems.length > 0 &&
+                  filteredItems[filteredItems.length - 1].id ===
+                    "vs.actions.separator"
+                ) {
+                  filteredItems.pop();
+                }
+                return filteredItems;
+              };
 
+              // --- set keyboard focus to the editor ---
+              editor.focus();
+
+              // --- add save-file action ---
               editor.addAction({
                 id: "save-file",
                 label: "Save",
@@ -156,7 +208,7 @@ const EditorPopup: React.FC<EditorPopupProps> = ({ data, onClose }) => {
       {/* Conditional Rendering Confirmation Popup. */}
       {showConfirmDialog && pendingAction && (
         <ConfirmDialog
-          message="Are you sure you want to save this file?"
+          message={t("popup.editor.confirmSaveFile")}
           onConfirm={() => {
             setShowConfirmDialog(false);
             pendingAction();

@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -13,9 +13,9 @@
 #include "include_internal/ten_runtime/engine/msg_interface/common.h"
 #include "include_internal/ten_runtime/msg/msg.h"
 #include "include_internal/ten_runtime/protocol/protocol.h"
-#include "ten_utils/macro/check.h"
 #include "ten_utils/io/runloop.h"
 #include "ten_utils/lib/smart_ptr.h"
+#include "ten_utils/macro/check.h"
 #include "ten_utils/macro/mark.h"
 #include "ten_utils/macro/memory.h"
 
@@ -120,9 +120,10 @@ void ten_engine_on_connection_cleaned_async(ten_engine_t *self,
   ten_engine_migration_user_data_t *user_data =
       ten_engine_migration_user_data_create(connection, cmd);
 
-  ten_runloop_post_task_tail(ten_engine_get_attached_runloop(self),
-                             ten_engine_on_connection_cleaned_task, self,
-                             user_data);
+  int rc = ten_runloop_post_task_tail(ten_engine_get_attached_runloop(self),
+                                      ten_engine_on_connection_cleaned_task,
+                                      self, user_data);
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 void ten_engine_on_connection_closed(ten_connection_t *connection,

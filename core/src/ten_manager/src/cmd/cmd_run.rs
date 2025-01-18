@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -11,11 +11,10 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use clap::{Arg, ArgMatches, Command};
+use ten_rust::pkg_info::constants::MANIFEST_JSON_FILENAME;
 
 use crate::{
-    config::TmanConfig,
-    constants::{MANIFEST_JSON_FILENAME, SCRIPTS},
-    log::tman_verbose_println,
+    config::TmanConfig, constants::SCRIPTS, log::tman_verbose_println,
 };
 
 #[derive(Debug)]
@@ -43,7 +42,7 @@ pub fn create_sub_cmd(_args_cfg: &crate::cmd_line::ArgsCfg) -> Command {
         )
 }
 
-pub fn parse_sub_cmd(sub_cmd_args: &ArgMatches) -> RunCommand {
+pub fn parse_sub_cmd(sub_cmd_args: &ArgMatches) -> Result<RunCommand> {
     let script_name = sub_cmd_args
         .get_one::<String>("SCRIPT_NAME")
         .expect("SCRIPT_NAME is required")
@@ -54,10 +53,10 @@ pub fn parse_sub_cmd(sub_cmd_args: &ArgMatches) -> RunCommand {
         .map(|vals| vals.map(|s| s.to_string()).collect())
         .unwrap_or_default();
 
-    RunCommand {
+    Ok(RunCommand {
         script_name,
         extra_args,
-    }
+    })
 }
 
 pub async fn execute_cmd(
@@ -67,7 +66,7 @@ pub async fn execute_cmd(
     tman_verbose_println!(tman_config, "Executing run command: {:?}", cmd);
 
     // Read `manifest.json` in the current working directory.
-    let cwd = crate::utils::get_cwd()?;
+    let cwd = crate::fs::get_cwd()?;
     let manifest_path = cwd.join(MANIFEST_JSON_FILENAME);
     if !manifest_path.exists() {
         return Err(anyhow!(
@@ -78,10 +77,10 @@ pub async fn execute_cmd(
     }
 
     // Parse `manifest.json`.
-    let manifest_json_str = crate::utils::read_file_to_string(&manifest_path)
+    let manifest_json_str = crate::fs::read_file_to_string(&manifest_path)
         .map_err(|e| {
-        anyhow!("Failed to read {}: {}", MANIFEST_JSON_FILENAME, e)
-    })?;
+            anyhow!("Failed to read {}: {}", MANIFEST_JSON_FILENAME, e)
+        })?;
     let manifest_value: serde_json::Value =
         serde_json::from_str(&manifest_json_str).map_err(|e| {
             anyhow!("Failed to parse {}: {}", MANIFEST_JSON_FILENAME, e)

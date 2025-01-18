@@ -56,7 +56,7 @@ def test_cpp_app_python():
             base_path, "cpp_app_python_app/lib"
         )
 
-    source_pkg_name = "cpp_app_python_app_source"
+    app_dir_name = "cpp_app_python_app"
     app_root_path = os.path.join(base_path, "cpp_app_python_app")
     app_language = "cpp"
 
@@ -65,14 +65,13 @@ def test_cpp_app_python():
     )
 
     if build_config_args.ten_enable_integration_tests_prebuilt is False:
-        print('Assembling and building package "{}".'.format(source_pkg_name))
+        print('Assembling and building package "{}".'.format(app_dir_name))
 
         rc = build_pkg.prepare_and_build_app(
             build_config_args,
             root_dir,
             base_path,
-            app_root_path,
-            source_pkg_name,
+            app_dir_name,
             app_language,
         )
         if rc != 0:
@@ -82,6 +81,7 @@ def test_cpp_app_python():
         os.path.join(root_dir, "ten_manager/bin/tman"),
         "--config-file",
         os.path.join(root_dir, "tests/local_registry/config.json"),
+        "--yes",
         "install",
     ]
 
@@ -115,6 +115,7 @@ def test_cpp_app_python():
             )
 
             if os.path.exists(libasan_path):
+                print("Using AddressSanitizer library.")
                 my_env["LD_PRELOAD"] = libasan_path
 
     server_cmd = os.path.join(base_path, "cpp_app_python_app/bin/start")
@@ -161,8 +162,8 @@ def test_cpp_app_python():
         assert exit_code == 0
 
         if build_config_args.ten_enable_integration_tests_prebuilt is False:
-            source_root_path = os.path.join(base_path, source_pkg_name)
+            source_root_path = os.path.join(base_path, app_dir_name)
 
             # Testing complete. If builds are only created during the testing
-            # phase, we  can clear the build results to save disk space.
+            # phase, we can clear the build results to save disk space.
             build_pkg.cleanup(source_root_path, app_root_path)

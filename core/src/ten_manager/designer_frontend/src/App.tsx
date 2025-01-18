@@ -1,10 +1,10 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
 //
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   addEdge,
   applyEdgeChanges,
@@ -13,18 +13,18 @@ import {
   NodeChange,
 } from "@xyflow/react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 import { ThemeProvider } from "@/components/ThemeProvider";
 import AppBar from "@/components/AppBar/AppBar";
 import FlowCanvas from "@/flow/FlowCanvas";
+import { useVersion } from "@/api/services/common";
 import {
-  fetchConnections,
-  fetchDesignerVersion,
-  fetchGraphs,
-  fetchNodes,
-  setBaseDir,
-} from "@/api/api";
-import { Graph } from "@/api/interface";
+  getGraphNodes,
+  getGraphConnections,
+  getGraphs,
+} from "@/api/services/graphs";
+import { putBaseDir } from "@/api/services/fileSystem";
 import { CustomNodeType } from "@/flow/CustomNode";
 import { CustomEdgeType } from "@/flow/CustomEdge";
 import {
@@ -35,28 +35,22 @@ import {
   processNodes,
 } from "@/flow/graph";
 import Popup from "@/components/Popup/Popup";
+import type { IGraph } from "@/types/graphs";
+import { ReactFlowDataContext } from "@/context/ReactFlowDataContext";
 
 const App: React.FC = () => {
-  const [version, setVersion] = useState<string>("");
-  const [graphs, setGraphs] = useState<Graph[]>([]);
+  const [graphs, setGraphs] = useState<IGraph[]>([]);
   const [showGraphSelection, setShowGraphSelection] = useState<boolean>(false);
   const [nodes, setNodes] = useState<CustomNodeType[]>([]);
   const [edges, setEdges] = useState<CustomEdgeType[]>([]);
 
   // Get the version of tman.
-  useEffect(() => {
-    fetchDesignerVersion()
-      .then((version) => {
-        setVersion(version);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch version:", err);
-      });
-  }, []);
+  const { version } = useVersion();
+  const { t } = useTranslation();
 
   const handleOpenExistingGraph = useCallback(async () => {
     try {
-      const fetchedGraphs = await fetchGraphs();
+      const fetchedGraphs = await getGraphs();
       setGraphs(fetchedGraphs);
       setShowGraphSelection(true);
     } catch (error: unknown) {
@@ -73,21 +67,35 @@ const App: React.FC = () => {
     setShowGraphSelection(false);
 
     try {
-      const backendNodes = await fetchNodes(graphName);
-      const backendConnections = await fetchConnections(graphName);
+      const backendNodes = await getGraphNodes(graphName);
+      const backendConnections = await getGraphConnections(graphName);
 
       let initialNodes: CustomNodeType[] = processNodes(backendNodes);
 
-      const { initialEdges, nodeSourceCmdMap, nodeTargetCmdMap } =
-        processConnections(backendConnections);
+      const {
+        initialEdges,
+        nodeSourceCmdMap,
+        nodeSourceDataMap,
+        nodeSourceAudioFrameMap,
+        nodeSourceVideoFrameMap,
+        nodeTargetCmdMap,
+        nodeTargetDataMap,
+        nodeTargetAudioFrameMap,
+        nodeTargetVideoFrameMap,
+      } = processConnections(backendConnections);
 
       // Write back the cmd information to nodes, so that CustomNode could
       // generate corresponding handles.
-      initialNodes = enhanceNodesWithCommands(
-        initialNodes,
+      initialNodes = enhanceNodesWithCommands(initialNodes, {
         nodeSourceCmdMap,
-        nodeTargetCmdMap
-      );
+        nodeTargetCmdMap,
+        nodeSourceDataMap,
+        nodeTargetDataMap,
+        nodeSourceAudioFrameMap,
+        nodeSourceVideoFrameMap,
+        nodeTargetAudioFrameMap,
+        nodeTargetVideoFrameMap,
+      });
 
       // Fetch additional addon information for each node.
       const nodesWithAddonInfo = await fetchAddonInfoForNodes(initialNodes);
@@ -128,12 +136,14 @@ const App: React.FC = () => {
 
   const handleSetBaseDir = useCallback(async (folderPath: string) => {
     try {
-      await setBaseDir(folderPath.trim());
+      await putBaseDir(folderPath.trim());
       setNodes([]); // Clear the contents of the FlowCanvas.
       setEdges([]);
     } catch (error: unknown) {
       if (error instanceof Error) {
-        toast.error(`Failed to open a new app folder: ${error.message}`);
+        toast.error(`Failed to open a new app folder`, {
+          description: error.message,
+        });
       } else {
         toast.error("An unknown error occurred.");
       }
@@ -143,43 +153,46 @@ const App: React.FC = () => {
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-      <AppBar
-        version={version}
-        onAutoLayout={performAutoLayout}
-        onOpenExistingGraph={handleOpenExistingGraph}
-        onSetBaseDir={handleSetBaseDir}
-      />
-      <FlowCanvas
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={handleNodesChange}
-        onEdgesChange={handleEdgesChange}
-        onConnect={(connection) => {
-          setEdges((eds) => addEdge(connection, eds));
-        }}
-      />
-      {showGraphSelection && (
-        <Popup
-          title="Select a Graph"
-          onClose={() => setShowGraphSelection(false)}
-          resizable={false}
-          initialWidth={400}
-          initialHeight={300}
-          onCollapseToggle={() => {}}
-        >
-          <ul>
-            {graphs.map((graph) => (
-              <li
-                key={graph.name}
-                style={{ cursor: "pointer", padding: "5px 0" }}
-                onClick={() => handleSelectGraph(graph.name)}
-              >
-                {graph.name} {graph.auto_start ? "(Auto Start)" : ""}
-              </li>
-            ))}
-          </ul>
-        </Popup>
-      )}
+      <ReactFlowDataContext.Provider value={{ nodes, edges }}>
+        <AppBar
+          version={version}
+          onAutoLayout={performAutoLayout}
+          onOpenExistingGraph={handleOpenExistingGraph}
+          onSetBaseDir={handleSetBaseDir}
+        />
+        <FlowCanvas
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={handleNodesChange}
+          onEdgesChange={handleEdgesChange}
+          onConnect={(connection) => {
+            setEdges((eds) => addEdge(connection, eds));
+          }}
+        />
+        {showGraphSelection && (
+          <Popup
+            title={t("popup.selectGraph.title")}
+            onClose={() => setShowGraphSelection(false)}
+            resizable={false}
+            initialWidth={400}
+            initialHeight={300}
+            onCollapseToggle={() => {}}
+          >
+            <ul>
+              {graphs.map((graph) => (
+                <li
+                  key={graph.name}
+                  style={{ cursor: "pointer", padding: "5px 0" }}
+                  onClick={() => handleSelectGraph(graph.name)}
+                >
+                  {graph.name}{" "}
+                  {graph.auto_start ? `(${t("action.autoStart")})` : ""}
+                </li>
+              ))}
+            </ul>
+          </Popup>
+        )}
+      </ReactFlowDataContext.Provider>
     </ThemeProvider>
   );
 };

@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -73,8 +73,9 @@ void ten_extension_tester_on_start(TEN_UNUSED ten_extension_tester_t *tester,
 }  // namespace
 
 TEST(StandaloneTest, BasicC) {  // NOLINT
-  ten_extension_tester_t *tester = ten_extension_tester_create(
-      ten_extension_tester_on_start, nullptr, nullptr, nullptr, nullptr);
+  ten_extension_tester_t *tester =
+      ten_extension_tester_create(ten_extension_tester_on_start, nullptr,
+                                  nullptr, nullptr, nullptr, nullptr);
   ten_extension_tester_set_test_mode_single(
       tester, "standalone_test_basic_c__test_extension_1", nullptr);
 

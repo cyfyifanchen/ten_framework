@@ -1,11 +1,12 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
 //
 #include <string.h>
 
+#include "include_internal/ten_runtime/binding/python/common/error.h"
 #include "include_internal/ten_runtime/binding/python/ten_env/ten_env.h"
 #include "include_internal/ten_runtime/ten_env/ten_env.h"
 #include "ten_runtime/ten_env/internal/on_xxx_done.h"
@@ -35,6 +36,11 @@ PyObject *ten_py_ten_env_on_start_done(PyObject *self,
   ten_py_ten_env_t *py_ten_env = (ten_py_ten_env_t *)self;
   TEN_ASSERT(py_ten_env && ten_py_ten_env_check_integrity(py_ten_env),
              "Invalid argument.");
+
+  if (!py_ten_env->c_ten_env_proxy) {
+    return ten_py_raise_py_value_error_exception(
+        "ten_env.on_start_done() failed because ten_env_proxy is invalid.");
+  }
 
   ten_error_t err;
   ten_error_init(&err);

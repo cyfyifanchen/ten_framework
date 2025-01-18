@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -14,10 +14,10 @@
 #include "include_internal/ten_runtime/msg/msg.h"
 #include "include_internal/ten_runtime/schema_store/store.h"
 #include "include_internal/ten_runtime/ten_env/metadata_cb.h"
-#include "ten_utils/macro/check.h"
 #include "include_internal/ten_utils/value/value_path.h"
 #include "ten_utils/lib/alloc.h"
 #include "ten_utils/lib/error.h"
+#include "ten_utils/macro/check.h"
 #include "ten_utils/macro/mark.h"
 #include "ten_utils/value/value.h"
 
@@ -108,9 +108,10 @@ bool ten_extension_set_property_async(ten_extension_t *self, const char *path,
   ten_extension_set_property_context_t *set_property_context =
       set_property_context_create(path, value, cb, cb_data);
 
-  ten_runloop_post_task_tail(ten_extension_get_attached_runloop(self),
-                             ten_extension_set_property_task, self,
-                             set_property_context);
+  int rc = ten_runloop_post_task_tail(ten_extension_get_attached_runloop(self),
+                                      ten_extension_set_property_task, self,
+                                      set_property_context);
+  TEN_ASSERT(!rc, "Should not happen.");
 
   return true;
 }
@@ -205,8 +206,10 @@ bool ten_extension_peek_property_async(
   ten_extension_peek_property_context_t *context =
       ten_extension_peek_property_context_create(path, cb, cb_data);
 
-  ten_runloop_post_task_tail(self->extension_thread->runloop,
-                             ten_extension_peek_property_task, self, context);
+  int rc = ten_runloop_post_task_tail(self->extension_thread->runloop,
+                                      ten_extension_peek_property_task, self,
+                                      context);
+  TEN_ASSERT(!rc, "Should not happen.");
 
   return true;
 }
@@ -300,8 +303,10 @@ bool ten_extension_peek_manifest_async(
   ten_extension_peek_manifest_context_t *context =
       ten_extension_peek_manifest_context_create(path, cb, cb_data);
 
-  ten_runloop_post_task_tail(self->extension_thread->runloop,
-                             ten_extension_peek_manifest_task, self, context);
+  int rc = ten_runloop_post_task_tail(self->extension_thread->runloop,
+                                      ten_extension_peek_manifest_task, self,
+                                      context);
+  TEN_ASSERT(!rc, "Should not happen.");
 
   return true;
 }

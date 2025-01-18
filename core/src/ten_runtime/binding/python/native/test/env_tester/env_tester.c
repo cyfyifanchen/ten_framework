@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -10,6 +10,7 @@
 
 #include "include_internal/ten_runtime/binding/python/common/error.h"
 #include "ten_runtime/binding/common.h"
+#include "ten_runtime/test/env_tester_proxy.h"
 #include "ten_utils/macro/check.h"
 
 bool ten_py_ten_env_tester_check_integrity(ten_py_ten_env_tester_t *self) {
@@ -33,6 +34,7 @@ static void ten_py_ten_env_tester_c_part_destroyed(
              "Should not happen.");
 
   ten_env_tester_bridge->c_ten_env_tester = NULL;
+
   ten_py_ten_env_tester_invalidate(ten_env_tester_bridge);
 }
 
@@ -100,6 +102,7 @@ ten_py_ten_env_tester_t *ten_py_ten_env_tester_wrap(
   ten_signature_set(&py_ten_env_tester->signature,
                     TEN_PY_TEN_ENV_TESTER_SIGNATURE);
   py_ten_env_tester->c_ten_env_tester = ten_env_tester;
+  py_ten_env_tester->c_ten_env_tester_proxy = NULL;
 
   py_ten_env_tester->actual_py_ten_env_tester =
       create_actual_py_ten_env_tester_instance(py_ten_env_tester);
@@ -138,6 +141,7 @@ PyTypeObject *ten_py_ten_env_tester_type(void) {
   static PyMethodDef ten_methods[] = {
       {"on_start_done", ten_py_ten_env_tester_on_start_done, METH_VARARGS,
        NULL},
+      {"on_stop_done", ten_py_ten_env_tester_on_stop_done, METH_VARARGS, NULL},
       {"stop_test", ten_py_ten_env_tester_stop_test, METH_VARARGS, NULL},
       {"send_cmd", ten_py_ten_env_tester_send_cmd, METH_VARARGS, NULL},
       {"send_data", ten_py_ten_env_tester_send_data, METH_VARARGS, NULL},
@@ -145,6 +149,9 @@ PyTypeObject *ten_py_ten_env_tester_type(void) {
        NULL},
       {"send_video_frame", ten_py_ten_env_tester_send_video_frame, METH_VARARGS,
        NULL},
+      {"return_result", ten_py_ten_env_tester_return_result, METH_VARARGS,
+       NULL},
+      {"log", ten_py_ten_env_tester_log, METH_VARARGS, NULL},
       {NULL, NULL, 0, NULL},
   };
 

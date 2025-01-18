@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -403,7 +403,7 @@ static void ten_raw_cmd_result_set_original_cmd_name(
              "Invalid argument.");
 
   ten_string_set_from_c_str(ten_value_peek_string(&self->original_cmd_name),
-                            original_cmd_name, strlen(original_cmd_name));
+                            original_cmd_name);
 }
 
 void ten_cmd_result_set_original_cmd_name(ten_shared_ptr_t *self,

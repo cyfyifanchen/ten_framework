@@ -1,5 +1,5 @@
 #
-# Copyright © 2024 Agora
+# Copyright © 2025 Agora
 # This file is part of TEN Framework, an open source project.
 # Licensed under the Apache License, Version 2.0, with certain conditions.
 # Refer to the "LICENSE" file in the root directory for more information.
@@ -8,9 +8,10 @@ import argparse
 import sys
 import os
 import shutil
-from build.scripts import cmd_exec
+from typing import Optional
 from dotenv import dotenv_values
 from io import StringIO
+from build.scripts import cmd_exec
 
 
 class ArgumentInfo(argparse.Namespace):
@@ -41,7 +42,7 @@ def ar_create(target_library: str, target_path: str, log_level: int) -> None:
         raise Exception("Failed to create static library.")
 
 
-def read_path_from_env_file(env_file: str) -> str | None:
+def read_path_from_env_file(env_file: str) -> Optional[str]:
     with open(env_file, "rb") as f:
         for line in f:
             # NUL character.

@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -12,6 +12,7 @@ use std::str::FromStr;
 use anyhow::{anyhow, Context, Result};
 use semver::Version;
 use tempfile::NamedTempFile;
+use ten_rust::pkg_info::constants::MANIFEST_JSON_FILENAME;
 use walkdir::WalkDir;
 use zip::ZipArchive;
 
@@ -21,7 +22,7 @@ use ten_rust::pkg_info::PkgInfo;
 
 use super::{FoundResult, SearchCriteria};
 use crate::config::TmanConfig;
-use crate::constants::{MANIFEST_JSON_FILENAME, TEN_PACKAGE_FILE_EXTENSION};
+use crate::constants::TEN_PACKAGE_FILE_EXTENSION;
 
 pub async fn upload_package(
     base_url: &str,

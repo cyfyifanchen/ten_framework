@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -74,8 +74,8 @@ pub fn get_pkg_info_for_extension<'a>(
         })
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "the addon '{}' used to instantiate extension '{}' is not found, \
-                check your addons in ten_packages/extension.",
+                "the addon '{}' used to instantiate extension '{}' is not \
+                found, check your addons in ten_packages/extension.",
                 extension.addon,
                 extension.type_and_name.name
             )

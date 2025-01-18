@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -91,8 +91,9 @@ static void proxy_on_start(ten_extension_tester_t *self,
                            ten_env_tester_t *ten_env_tester) {
   TEN_ASSERT(self && ten_extension_tester_check_integrity(self, true),
              "Should not happen.");
-  TEN_ASSERT(ten_env_tester && ten_env_tester_check_integrity(ten_env_tester),
-             "Should not happen.");
+  TEN_ASSERT(
+      ten_env_tester && ten_env_tester_check_integrity(ten_env_tester, true),
+      "Should not happen.");
   TEN_ASSERT(ten_extension_tester_get_ten_env_tester(self) == ten_env_tester,
              "Should not happen.");
 
@@ -114,8 +115,9 @@ static void proxy_on_cmd(ten_extension_tester_t *self,
                          ten_shared_ptr_t *cmd) {
   TEN_ASSERT(self && ten_extension_tester_check_integrity(self, true),
              "Should not happen.");
-  TEN_ASSERT(ten_env_tester && ten_env_tester_check_integrity(ten_env_tester),
-             "Should not happen.");
+  TEN_ASSERT(
+      ten_env_tester && ten_env_tester_check_integrity(ten_env_tester, true),
+      "Should not happen.");
   TEN_ASSERT(ten_extension_tester_get_ten_env_tester(self) == ten_env_tester,
              "Should not happen.");
   TEN_ASSERT(cmd && ten_cmd_check_integrity(cmd), "Should not happen.");
@@ -141,8 +143,9 @@ static void proxy_on_data(ten_extension_tester_t *self,
                           ten_shared_ptr_t *data) {
   TEN_ASSERT(self && ten_extension_tester_check_integrity(self, true),
              "Should not happen.");
-  TEN_ASSERT(ten_env_tester && ten_env_tester_check_integrity(ten_env_tester),
-             "Should not happen.");
+  TEN_ASSERT(
+      ten_env_tester && ten_env_tester_check_integrity(ten_env_tester, true),
+      "Should not happen.");
   TEN_ASSERT(ten_extension_tester_get_ten_env_tester(self) == ten_env_tester,
              "Should not happen.");
   TEN_ASSERT(data && ten_msg_check_integrity(data), "Should not happen.");
@@ -168,8 +171,9 @@ static void proxy_on_audio_frame(ten_extension_tester_t *self,
                                  ten_shared_ptr_t *audio_frame) {
   TEN_ASSERT(self && ten_extension_tester_check_integrity(self, true),
              "Should not happen.");
-  TEN_ASSERT(ten_env_tester && ten_env_tester_check_integrity(ten_env_tester),
-             "Should not happen.");
+  TEN_ASSERT(
+      ten_env_tester && ten_env_tester_check_integrity(ten_env_tester, true),
+      "Should not happen.");
   TEN_ASSERT(ten_extension_tester_get_ten_env_tester(self) == ten_env_tester,
              "Should not happen.");
   TEN_ASSERT(audio_frame && ten_msg_check_integrity(audio_frame),
@@ -196,8 +200,9 @@ static void proxy_on_video_frame(ten_extension_tester_t *self,
                                  ten_shared_ptr_t *video_frame) {
   TEN_ASSERT(self && ten_extension_tester_check_integrity(self, true),
              "Should not happen.");
-  TEN_ASSERT(ten_env_tester && ten_env_tester_check_integrity(ten_env_tester),
-             "Should not happen.");
+  TEN_ASSERT(
+      ten_env_tester && ten_env_tester_check_integrity(ten_env_tester, true),
+      "Should not happen.");
   TEN_ASSERT(ten_extension_tester_get_ten_env_tester(self) == ten_env_tester,
              "Should not happen.");
   TEN_ASSERT(video_frame && ten_msg_check_integrity(video_frame),
@@ -258,9 +263,9 @@ ten_go_extension_tester_t *ten_go_extension_tester_create_internal(
       extension_tester_bridge, ten_go_extension_tester_bridge_destroy);
   extension_tester_bridge->bridge.sp_ref_by_c = NULL;
 
-  extension_tester_bridge->c_extension_tester =
-      ten_extension_tester_create(proxy_on_start, proxy_on_cmd, proxy_on_data,
-                                  proxy_on_audio_frame, proxy_on_video_frame);
+  extension_tester_bridge->c_extension_tester = ten_extension_tester_create(
+      proxy_on_start, NULL, proxy_on_cmd, proxy_on_data, proxy_on_audio_frame,
+      proxy_on_video_frame);
 
   ten_binding_handle_set_me_in_target_lang(
       &extension_tester_bridge->c_extension_tester->binding_handle,

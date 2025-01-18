@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -142,8 +142,9 @@ void ten_engine_close_async(ten_engine_t *self) {
     return;
   }
 
-  ten_runloop_post_task_tail(ten_engine_get_attached_runloop(self),
-                             ten_engine_close_task, self, NULL);
+  int rc = ten_runloop_post_task_tail(ten_engine_get_attached_runloop(self),
+                                      ten_engine_close_task, self, NULL);
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 bool ten_engine_is_closing(ten_engine_t *self) {

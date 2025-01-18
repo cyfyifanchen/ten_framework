@@ -1,10 +1,9 @@
 #
-# Copyright © 2024 Agora
+# Copyright © 2025 Agora
 # This file is part of TEN Framework, an open source project.
 # Licensed under the Apache License, Version 2.0, with certain conditions.
 # Refer to the "LICENSE" file in the root directory for more information.
 #
-from pathlib import Path
 from typing import Optional
 from ten import (
     ExtensionTester,
@@ -29,7 +28,7 @@ class ExtensionTesterSetProperty(ExtensionTester):
         assert result is not None
 
         statusCode = result.get_status_code()
-        print("receive hello_world, status:" + str(statusCode))
+        ten_env.log_info("receive hello_world, status:" + str(statusCode))
 
         if statusCode == StatusCode.OK:
             detail = result.get_property_string("detail")
@@ -47,13 +46,12 @@ class ExtensionTesterSetProperty(ExtensionTester):
             ),
         )
 
-        print("tester on_start_done")
+        ten_env.log_info("tester on_start_done")
         ten_env.on_start_done()
 
 
 def test_set_property():
     tester = ExtensionTesterSetProperty()
-    tester.add_addon_base_dir(str(Path(__file__).resolve().parent.parent))
     tester.set_test_mode_single(
         "default_extension_python", '{"greeting": "hola"}'
     )

@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -7,6 +7,7 @@
 #include "include_internal/ten_runtime/protocol/protocol.h"
 
 #include "include_internal/ten_runtime/addon/addon.h"
+#include "include_internal/ten_runtime/addon/addon_host.h"
 #include "include_internal/ten_runtime/addon/protocol/protocol.h"
 #include "include_internal/ten_runtime/app/app.h"
 #include "include_internal/ten_runtime/common/constant_str.h"
@@ -20,8 +21,6 @@
 #include "include_internal/ten_utils/log/log.h"
 #include "ten_runtime/addon/addon.h"
 #include "ten_runtime/app/app.h"
-#include "ten_runtime/protocol/close.h"
-#include "ten_runtime/protocol/protocol.h"
 #include "ten_utils/lib/error.h"
 #include "ten_utils/lib/mutex.h"
 #include "ten_utils/lib/ref.h"

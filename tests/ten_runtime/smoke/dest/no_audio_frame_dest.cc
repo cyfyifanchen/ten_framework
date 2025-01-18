@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -37,7 +37,7 @@ class test_extension_1 : public ten::extension_t {
       ASSERT_EQ(rc, false);
       ASSERT_EQ(err.is_success(), false);
 
-      TEN_ENV_LOG_ERROR(ten_env, err.errmsg());
+      TEN_ENV_LOG_ERROR(ten_env, err.err_msg());
 
       auto audio_frame = ten::audio_frame_t::create("audio_frame");
       rc = ten_env.send_audio_frame(std::move(audio_frame));

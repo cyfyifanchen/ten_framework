@@ -1,13 +1,17 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
 //
 #include "include_internal/ten_runtime/addon/addon_autoload.h"
+#include "include_internal/ten_runtime/addon/addon_loader/addon_loader.h"
 #include "include_internal/ten_runtime/addon/addon_manager.h"
+#include "include_internal/ten_runtime/addon/common/common.h"
 #include "include_internal/ten_runtime/addon/extension/extension.h"
+#include "include_internal/ten_runtime/addon/extension_group/extension_group.h"
 #include "include_internal/ten_runtime/addon/protocol/protocol.h"
+#include "include_internal/ten_runtime/addon_loader/addon_loader.h"
 #include "include_internal/ten_runtime/app/app.h"
 #include "include_internal/ten_runtime/app/base_dir.h"
 #include "include_internal/ten_runtime/app/close.h"
@@ -27,8 +31,9 @@
 #include "include_internal/ten_runtime/ten_env/log.h"
 #include "include_internal/ten_runtime/ten_env/metadata_cb.h"
 #include "include_internal/ten_runtime/ten_env/ten_env.h"
+#include "include_internal/ten_runtime/test/test_extension.h"
+#include "ten_runtime/addon/addon.h"
 #include "ten_runtime/app/app.h"
-#include "ten_runtime/protocol/protocol.h"
 #include "ten_runtime/ten_env/internal/on_xxx_done.h"
 #include "ten_runtime/ten_env/ten_env.h"
 #include "ten_utils/lib/error.h"
@@ -113,6 +118,43 @@ static void ten_app_on_endpoint_protocol_created(ten_env_t *ten_env,
   ten_app_start_auto_start_predefined_graph_and_trigger_on_init(self);
 }
 
+void ten_app_on_all_addon_loaders_created(ten_app_t *self) {
+  TEN_ASSERT(self && ten_app_check_integrity(self, true), "Should not happen.");
+
+  int lock_operation_rc = ten_addon_loader_singleton_store_unlock();
+  TEN_ASSERT(!lock_operation_rc, "Should not happen.");
+
+  ten_error_t err;
+  ten_error_init(&err);
+
+  if (!ten_app_get_predefined_graphs_from_property(self)) {
+    goto error;
+  }
+
+  if (!ten_string_is_equal_c_str(&self->uri, TEN_STR_LOCALHOST) &&
+      !ten_string_starts_with(&self->uri, TEN_STR_CLIENT)) {
+    // Create the app listening endpoint protocol if specifying one.
+    bool rc = ten_addon_create_protocol_with_uri(
+        self->ten_env, ten_string_get_raw_str(&self->uri),
+        TEN_PROTOCOL_ROLE_LISTEN, ten_app_on_endpoint_protocol_created, NULL,
+        &err);
+    if (!rc) {
+      TEN_LOGW("Failed to create app endpoint protocol, %s.",
+               ten_error_errmsg(&err));
+      goto error;
+    }
+  } else {
+    ten_app_start_auto_start_predefined_graph_and_trigger_on_init(self);
+  }
+
+  goto done;
+
+error:
+  ten_app_close(self, NULL);
+done:
+  ten_error_deinit(&err);
+}
+
 void ten_app_on_configure_done(ten_env_t *ten_env) {
   TEN_ASSERT(ten_env, "Invalid argument.");
   TEN_ASSERT(ten_env_check_integrity(ten_env, true),
@@ -129,6 +171,7 @@ void ten_app_on_configure_done(ten_env_t *ten_env) {
       &self->manifest_info, ten_app_get_base_dir(self), &self->manifest, &err);
   if (!rc) {
     TEN_LOGW("Failed to load app manifest data, FATAL ERROR.");
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
     exit(EXIT_FAILURE);
   }
 
@@ -136,6 +179,7 @@ void ten_app_on_configure_done(ten_env_t *ten_env) {
       &self->property_info, ten_app_get_base_dir(self), &self->property, &err);
   if (!rc) {
     TEN_LOGW("Failed to load app property data, FATAL ERROR.");
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
     exit(EXIT_FAILURE);
   }
 
@@ -147,63 +191,40 @@ void ten_app_on_configure_done(ten_env_t *ten_env) {
   ten_app_adjust_and_validate_property_on_configure_done(self);
 
   if (ten_string_is_empty(&self->uri)) {
-    ten_string_set_from_c_str(&self->uri, TEN_STR_LOCALHOST,
-                              strlen(TEN_STR_LOCALHOST));
+    ten_string_set_from_c_str(&self->uri, TEN_STR_LOCALHOST);
   }
 
-  ten_list_t extension_dependencies;
-  ten_list_t extension_group_dependencies;
-  ten_list_t protocol_dependencies;
+  // @{
+  // Addon initialization phase 1: loading.
+  int lock_operation_rc = ten_addon_store_lock_all_type();
+  TEN_ASSERT(!lock_operation_rc, "Should not happen.");
 
-  ten_list_init(&extension_dependencies);
-  ten_list_init(&extension_group_dependencies);
-  ten_list_init(&protocol_dependencies);
+  ten_addon_load_all_from_app_base_dir(ten_string_get_raw_str(&self->base_dir),
+                                       &err);
+  ten_addon_load_all_from_ten_package_base_dirs(&self->ten_package_base_dirs,
+                                                &err);
 
-  ten_manifest_get_dependencies_type_and_name(
-      &self->manifest, &extension_dependencies, &extension_group_dependencies,
-      &protocol_dependencies);
+  // Addon initialization phase 2: registering.
+  ten_builtin_extension_group_addon_register();
+  ten_builtin_test_extension_addon_register();
 
-  ten_addon_load_all_from_app_base_dir(self, &extension_dependencies,
-                                       &extension_group_dependencies,
-                                       &protocol_dependencies, &err);
-  ten_addon_load_all_from_ten_package_base_dirs(self, &err);
-
-  ten_list_clear(&extension_dependencies);
-  ten_list_clear(&extension_group_dependencies);
-  ten_list_clear(&protocol_dependencies);
-
-  // Register all addons.
   ten_addon_manager_t *manager = ten_addon_manager_get_instance();
   ten_addon_register_ctx_t *register_ctx = ten_addon_register_ctx_create();
   register_ctx->app = self;
+
   ten_addon_manager_register_all_addons(manager, (void *)register_ctx);
   ten_addon_register_ctx_destroy(register_ctx);
 
-  if (!ten_app_get_predefined_graphs_from_property(self)) {
-    goto error;
+  lock_operation_rc = ten_addon_store_unlock_all_type();
+  TEN_ASSERT(!lock_operation_rc, "Should not happen.");
+  // @}
+
+  // Create addon loader singleton instances.
+  bool need_to_wait_all_addon_loaders_created =
+      ten_addon_loader_addons_create_singleton_instance(ten_env);
+  if (!need_to_wait_all_addon_loaders_created) {
+    ten_app_on_all_addon_loaders_created(self);
   }
-
-  if (!ten_string_is_equal_c_str(&self->uri, TEN_STR_LOCALHOST) &&
-      !ten_string_starts_with(&self->uri, TEN_STR_CLIENT)) {
-    // Create the app listening endpoint protocol if specifying one.
-    rc = ten_addon_create_protocol_with_uri(
-        self->ten_env, ten_string_get_raw_str(&self->uri),
-        TEN_PROTOCOL_ROLE_LISTEN, ten_app_on_endpoint_protocol_created, NULL,
-        &err);
-    if (!rc) {
-      TEN_LOGW("Failed to create app endpoint protocol, %s.",
-               ten_error_errmsg(&err));
-      goto error;
-    }
-  } else {
-    ten_app_start_auto_start_predefined_graph_and_trigger_on_init(self);
-  }
-
-  return;
-
-error:
-  ten_error_deinit(&err);
-  ten_app_close(self, NULL);
 }
 
 void ten_app_on_configure(ten_env_t *ten_env) {
@@ -267,23 +288,39 @@ static void ten_app_unregister_addons_after_app_close(ten_app_t *self) {
     return;
   }
 
-  ten_addon_unregister_all_extension();
+  ten_unregister_all_addons_and_cleanup();
 }
 
 void ten_app_on_deinit(ten_app_t *self) {
   TEN_ASSERT(self && ten_app_check_integrity(self, true), "Should not happen.");
 
-  // At the final stage of addon deinitialization, `ten_env_t::on_deinit_done`
-  // is required, which in turn depends on the runloop. Therefore, the addon
-  // deinitialization process must be performed before the app's runloop ends.
-  // After `app::on_deinit`, the app's runloop will be terminated soon, leaving
-  // no runloop within the TEN runtime. As a result, addon cleanup must be
-  // performed during the app's `on_deinit` phase.
-  ten_app_unregister_addons_after_app_close(self);
-
   // The world outside of TEN would do some operations after the app_run()
   // returns, so it's best to perform the on_deinit callback _before_ the
   // runloop is stopped.
+
+  // @{
+  // **Note:** The two functions below will invoke functions like `on_deinit`,
+  // which may call into different language environments, such as the
+  // `on_deinit` function of a Python addon. Therefore, these two functions must
+  // not be called within the call flow of the C API initiated by those
+  // languages. In other words, these two functions cannot be invoked within the
+  // call flow of functions like `on_deinit_done`. Instead, they must be called
+  // within the call flow of a purely C-native thread; otherwise, it may
+  // potentially lead to a deadlock.
+
+  // The `on_deinit` of the protocol instance needs to call the `on_deinit_done`
+  // of the addon host, so this logic must be performed before unregistering the
+  // protocol addons.
+  if (self->endpoint_protocol) {
+    ten_ref_dec_ref(&self->endpoint_protocol->ref);
+  }
+
+  // At the final stage of addon deinitialization, `ten_env_t::on_deinit_done`
+  // is required, which in turn depends on the runloop. Therefore, the addon
+  // deinitialization process must be performed _before_ the app's runloop
+  // ends.
+  ten_app_unregister_addons_after_app_close(self);
+  // @}
 
   if (self->on_deinit) {
     // Call the registered on_deinit callback if exists.

@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -142,9 +142,10 @@ static void ten_app_set_property_async_cb_go_back_to_extension(ten_app_t *app,
 
   context->res = ten_error_is_success(err);
 
-  ten_runloop_post_task_tail(
+  int rc = ten_runloop_post_task_tail(
       ten_extension_get_attached_runloop(context->from.extension),
       ten_env_set_property_done_task, NULL, context);
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 static void ten_app_set_property_async_cb_go_back_to_extension_group(
@@ -158,9 +159,10 @@ static void ten_app_set_property_async_cb_go_back_to_extension_group(
 
   context->res = ten_error_is_success(err);
 
-  ten_runloop_post_task_tail(
+  int rc = ten_runloop_post_task_tail(
       ten_extension_group_get_attached_runloop(context->from.extension_group),
       ten_env_set_property_done_task, NULL, context);
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 static void ten_app_set_property_async_cb(ten_app_t *app, ten_error_t *err,

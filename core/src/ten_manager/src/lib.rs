@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -25,6 +25,7 @@ pub mod cmd;
 pub mod cmd_line;
 pub mod config;
 pub mod constants;
+mod create;
 mod dep_and_candidate;
 pub mod designer;
 mod error;
@@ -36,8 +37,8 @@ mod package_file;
 mod package_info;
 mod registry;
 mod solver;
-mod utils;
 mod version;
+mod version_utils;
 
 #[cfg(not(target_os = "windows"))]
 use mimalloc::MiMalloc;

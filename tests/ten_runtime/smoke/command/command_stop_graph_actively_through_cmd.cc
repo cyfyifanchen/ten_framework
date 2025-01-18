@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -69,16 +69,7 @@ class test_extension_4 : public ten::extension_t {
       ten_env.return_result(std::move(cmd_result), std::move(cmd));
 
       auto stop_graph_cmd = ten::cmd_stop_graph_t::create();
-      auto json =
-          R"({
-               "_ten": {
-                 "type": "stop_graph",
-                 "dest": [{
-                   "app": "localhost"
-                 }]
-               }
-             })"_json;
-      stop_graph_cmd->set_property_from_json(nullptr, json.dump().c_str());
+      stop_graph_cmd->set_dest("localhost", nullptr, nullptr, nullptr);
       ten_env.send_cmd(std::move(stop_graph_cmd));
     }
   }

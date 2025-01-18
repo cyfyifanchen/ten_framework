@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -45,7 +45,7 @@ struct ten_extension_context_t {
   // thread, so we don't need to apply any locking mechanism for it.
   ten_list_t extension_threads;
 
-  size_t extension_threads_cnt_of_initted;
+  size_t extension_threads_cnt_of_ready;
   size_t extension_threads_cnt_of_closed;
 
   ten_list_t extension_groups_info_from_graph;
@@ -58,8 +58,10 @@ struct ten_extension_context_t {
   ten_engine_t *engine;
 
   // 'state_requester_cmd' will be used in the following scenarios:
-  // 1. starting all extension threads when client sends 'start_graph' cmd.
-  // 2. closing all extension threads when receiving a close cmd.
+  // 1. starting all extension threads when client sends 'start_graph' cmd, and
+  //    the state_requester_cmd is the start_graph cmd.
+  // 2. closing all extension threads when receiving a close cmd, and the
+  //    state_requester_cmd is the close cmd.
   ten_shared_ptr_t *state_requester_cmd;
 };
 

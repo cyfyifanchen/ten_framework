@@ -1,5 +1,5 @@
 #
-# Copyright © 2024 Agora
+# Copyright © 2025 Agora
 # This file is part of TEN Framework, an open source project.
 # Licensed under the Apache License, Version 2.0, with certain conditions.
 # Refer to the "LICENSE" file in the root directory for more information.
@@ -29,7 +29,13 @@ def test_tman_dependency_resolve():
     )
 
     returncode, output_text = cmd_exec.run_cmd_realtime(
-        [tman_bin, f"--config-file={config_file}", "install", "--os=linux"],
+        [
+            tman_bin,
+            f"--config-file={config_file}",
+            "--yes",
+            "install",
+            "--os=linux",
+        ],
         cwd=app_dir,
     )
 

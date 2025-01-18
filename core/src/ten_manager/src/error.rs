@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -9,7 +9,6 @@ pub enum TmanError {
     FileNotFound(String),
     ReadFileContentError(String),
     InvalidPath(String, String),
-    Custom(String),
 }
 
 // One of the purposes of an error is to be displayed, so it needs to implement
@@ -25,9 +24,6 @@ impl std::fmt::Display for TmanError {
             }
             TmanError::InvalidPath(path, root_cause) => {
                 write!(f, "The path '{}' is not valid: {}.", path, root_cause)
-            }
-            TmanError::Custom(str) => {
-                write!(f, "{}", str)
             }
         }
     }

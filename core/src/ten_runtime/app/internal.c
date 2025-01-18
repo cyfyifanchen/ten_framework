@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -56,8 +56,9 @@ void ten_app_start(ten_app_t *self) {
   ten_app_find_and_set_base_dir(self);
 
   // Add the first task of app.
-  ten_runloop_post_task_tail(self->loop, ten_app_handle_metadata_task, self,
-                             NULL);
+  int rc = ten_runloop_post_task_tail(self->loop, ten_app_handle_metadata_task,
+                                      self, NULL);
+  TEN_ASSERT(!rc, "Should not happen.");
 
   ten_runloop_run(self->loop);
 

@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -7,12 +7,17 @@
 #include "ten_runtime/addon/addon.h"
 
 #include "include_internal/ten_runtime/addon/addon.h"
+#include "include_internal/ten_runtime/addon/addon_autoload.h"
+#include "include_internal/ten_runtime/addon/addon_host.h"
+#include "include_internal/ten_runtime/addon/addon_loader/addon_loader.h"
+#include "include_internal/ten_runtime/addon/addon_manager.h"
+#include "include_internal/ten_runtime/addon/common/common.h"
 #include "include_internal/ten_runtime/addon/common/store.h"
 #include "include_internal/ten_runtime/addon/extension/extension.h"
 #include "include_internal/ten_runtime/addon/extension_group/extension_group.h"
 #include "include_internal/ten_runtime/addon/protocol/protocol.h"
+#include "include_internal/ten_runtime/app/app.h"
 #include "include_internal/ten_runtime/app/base_dir.h"
-#include "include_internal/ten_runtime/common/base_dir.h"
 #include "include_internal/ten_runtime/common/constant_str.h"
 #include "include_internal/ten_runtime/extension/extension.h"
 #include "include_internal/ten_runtime/extension_group/extension_group.h"
@@ -22,20 +27,9 @@
 #include "ten_runtime/binding/common.h"
 #include "ten_runtime/ten_env/ten_env.h"
 #include "ten_utils/lib/alloc.h"
-#include "ten_utils/lib/path.h"
 #include "ten_utils/lib/signature.h"
 #include "ten_utils/lib/string.h"
 #include "ten_utils/macro/check.h"
-#include "ten_utils/macro/mark.h"
-
-bool ten_addon_host_check_integrity(ten_addon_host_t *self) {
-  TEN_ASSERT(self, "Should not happen.");
-  if (ten_signature_get(&self->signature) != TEN_ADDON_HOST_SIGNATURE) {
-    return false;
-  }
-
-  return true;
-}
 
 bool ten_addon_check_integrity(ten_addon_t *self) {
   TEN_ASSERT(self, "Should not happen.");
@@ -82,89 +76,6 @@ void ten_addon_destroy(ten_addon_t *self) {
   TEN_FREE(self);
 }
 
-static void ten_addon_deinit(ten_addon_host_t *self) {
-  TEN_ASSERT(self, "Should not happen.");
-  TEN_ASSERT(self->addon, "Should not happen.");
-
-  if (self->addon->on_deinit) {
-    self->addon->on_deinit(self->addon, self->ten_env);
-  } else {
-    ten_env_on_deinit_done(self->ten_env, NULL);
-  }
-}
-
-static void ten_addon_on_end_of_life(TEN_UNUSED ten_ref_t *ref,
-                                     void *supervisee) {
-  ten_addon_host_t *addon = supervisee;
-  TEN_ASSERT(addon, "Invalid argument.");
-
-  ten_addon_deinit(addon);
-}
-
-void ten_addon_host_init(ten_addon_host_t *self) {
-  TEN_ASSERT(self, "Should not happen.");
-
-  ten_signature_set(&self->signature, TEN_ADDON_HOST_SIGNATURE);
-
-  ten_string_init(&self->name);
-  ten_string_init(&self->base_dir);
-
-  ten_value_init_object_with_move(&self->manifest, NULL);
-  ten_value_init_object_with_move(&self->property, NULL);
-
-  ten_ref_init(&self->ref, self, ten_addon_on_end_of_life);
-  self->ten_env = NULL;
-
-  self->manifest_info = NULL;
-  self->property_info = NULL;
-
-  self->user_data = NULL;
-}
-
-void ten_addon_host_destroy(ten_addon_host_t *self) {
-  TEN_ASSERT(self, "Should not happen.");
-
-  ten_signature_set(&self->signature, 0);
-
-  ten_string_deinit(&self->name);
-  ten_string_deinit(&self->base_dir);
-
-  ten_value_deinit(&self->manifest);
-  ten_value_deinit(&self->property);
-
-  if (self->manifest_info) {
-    ten_metadata_info_destroy(self->manifest_info);
-    self->manifest_info = NULL;
-  }
-  if (self->property_info) {
-    ten_metadata_info_destroy(self->property_info);
-    self->property_info = NULL;
-  }
-
-  ten_env_destroy(self->ten_env);
-  TEN_FREE(self);
-}
-
-static void ten_addon_load_metadata(ten_addon_host_t *self, ten_env_t *ten_env,
-                                    ten_addon_on_init_func_t on_init) {
-  TEN_ASSERT(self && ten_addon_host_check_integrity(self),
-             "Should not happen.");
-  TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true) &&
-                 ten_env_get_attached_addon(ten_env) == self,
-             "Should not happen.");
-
-  self->manifest_info =
-      ten_metadata_info_create(TEN_METADATA_ATTACH_TO_MANIFEST, ten_env);
-  self->property_info =
-      ten_metadata_info_create(TEN_METADATA_ATTACH_TO_PROPERTY, ten_env);
-
-  if (on_init) {
-    on_init(self->addon, ten_env);
-  } else {
-    ten_env_on_init_done(ten_env, NULL);
-  }
-}
-
 TEN_ADDON_TYPE ten_addon_type_from_string(const char *addon_type_str) {
   TEN_ASSERT(addon_type_str, "Invalid argument.");
 
@@ -174,12 +85,14 @@ TEN_ADDON_TYPE ten_addon_type_from_string(const char *addon_type_str) {
     return TEN_ADDON_TYPE_EXTENSION_GROUP;
   } else if (ten_c_string_is_equal(addon_type_str, TEN_STR_PROTOCOL)) {
     return TEN_ADDON_TYPE_PROTOCOL;
+  } else if (ten_c_string_is_equal(addon_type_str, TEN_STR_ADDON_LOADER)) {
+    return TEN_ADDON_TYPE_ADDON_LOADER;
   } else {
     return TEN_ADDON_TYPE_INVALID;
   }
 }
 
-static const char *ten_addon_type_to_string(TEN_ADDON_TYPE type) {
+const char *ten_addon_type_to_string(TEN_ADDON_TYPE type) {
   switch (type) {
     case TEN_ADDON_TYPE_EXTENSION:
       return TEN_STR_EXTENSION;
@@ -187,6 +100,8 @@ static const char *ten_addon_type_to_string(TEN_ADDON_TYPE type) {
       return TEN_STR_EXTENSION_GROUP;
     case TEN_ADDON_TYPE_PROTOCOL:
       return TEN_STR_PROTOCOL;
+    case TEN_ADDON_TYPE_ADDON_LOADER:
+      return TEN_STR_ADDON_LOADER;
     default:
       TEN_ASSERT(0, "Should not happen.");
       return NULL;
@@ -201,9 +116,10 @@ static const char *ten_addon_type_to_string(TEN_ADDON_TYPE type) {
  * Developers could override the 'on_init' function to perform user-defined
  * operations the addon needs.
  */
-void ten_addon_register(ten_addon_store_t *addon_store,
-                        ten_addon_host_t *addon_host, const char *name,
-                        const char *base_dir, ten_addon_t *addon) {
+static void ten_addon_register_internal(ten_addon_store_t *addon_store,
+                                        ten_addon_host_t *addon_host,
+                                        const char *name, const char *base_dir,
+                                        ten_addon_t *addon) {
   TEN_ASSERT(addon_host && ten_addon_host_check_integrity(addon_host),
              "Should not happen.");
   TEN_ASSERT(name, "Should not happen.");
@@ -221,79 +137,152 @@ void ten_addon_register(ten_addon_store_t *addon_store,
   // parameter value.
   if (base_dir) {
     TEN_LOGD("Addon %s base_dir: %s", name, base_dir);
-    ten_addon_find_and_set_base_dir(addon_host, base_dir);
+    ten_addon_host_find_and_set_base_dir(addon_host, base_dir);
   }
   TEN_LOGI("Register addon: %s as %s", name,
            ten_addon_type_to_string(addon_host->type));
 
-  ten_addon_load_metadata(addon_host, addon_host->ten_env,
-                          addon_host->addon->on_init);
+  ten_addon_host_load_metadata(addon_host, addon_host->ten_env,
+                               addon_host->addon->on_init);
 }
 
-ten_addon_on_create_instance_info_t *ten_addon_on_create_instance_info_create(
-    const char *addon_name, const char *instance_name,
-    TEN_ADDON_TYPE addon_type, ten_env_addon_create_instance_done_cb_t cb,
-    void *cb_data) {
-  TEN_ASSERT(addon_name && instance_name, "Should not happen.");
+/**
+ * @param ten Might be the ten of the 'engine', or the ten of an extension
+ * thread(group).
+ * @param cb The callback when the creation is completed. Because there might be
+ * more than one extension threads to create extensions from the corresponding
+ * extension addons simultaneously. So we can _not_ save the function pointer
+ * of @a cb into @a ten, instead we need to pass the function pointer of @a cb
+ * through a parameter.
+ * @param cb_data The user data of @a cb. Refer the comments of @a cb for the
+ * reason why we pass the pointer of @a cb_data through a parameter rather than
+ * saving it into @a ten.
+ *
+ * @note We will save the pointers of @a cb and @a cb_data into a 'ten' object
+ * later in the call flow when the 'ten' object at that time belongs to a more
+ * specific scope, so that we can minimize the parameters count then.
+ */
+bool ten_addon_create_instance_async(ten_env_t *ten_env,
+                                     TEN_ADDON_TYPE addon_type,
+                                     const char *addon_name,
+                                     const char *instance_name,
+                                     ten_env_addon_create_instance_done_cb_t cb,
+                                     void *cb_data) {
+  // We increase the refcount of the 'addon' here, and will decrease the
+  // refcount in "ten_(extension/extension_group)_set_addon" after the
+  // extension/extension_group instance has been created.
+  TEN_LOGD("Try to find addon for %s", addon_name);
 
-  ten_addon_on_create_instance_info_t *self =
-      (ten_addon_on_create_instance_info_t *)TEN_MALLOC(
-          sizeof(ten_addon_on_create_instance_info_t));
-  TEN_ASSERT(self, "Failed to allocate memory.");
+  TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
+             "Should not happen.");
 
-  ten_string_init_formatted(&self->addon_name, "%s", addon_name);
-  ten_string_init_formatted(&self->instance_name, "%s", instance_name);
-  self->addon_type = addon_type;
-  self->cb = cb;
-  self->cb_data = cb_data;
+  int lock_operation_rc = ten_addon_store_lock_by_type(addon_type);
+  TEN_ASSERT(!lock_operation_rc, "Should not happen.");
 
-  return self;
+  ten_addon_host_t *addon_host =
+      ten_addon_store_find_by_type(addon_type, addon_name);
+  if (!addon_host) {
+    ten_app_t *app = ten_env_get_belonging_app(ten_env);
+    TEN_ASSERT(app && ten_app_check_integrity(
+                          app,
+                          // This function only needs to use the `base_dir`
+                          // field of the app, and this field does not change
+                          // after the app starts. Therefore, this function can
+                          // be called outside of the app thread.
+                          false),
+               "Should not happen.");
+
+    // First, try to load it using the built-in native addon loader (i.e.,
+    // `dlopen`).
+    if (!ten_addon_try_load_specific_addon_using_native_addon_loader(
+            ten_string_get_raw_str(&app->base_dir), addon_type, addon_name)) {
+      TEN_LOGI(
+          "Unable to load addon %s:%s using native addon loader, will try "
+          "other methods.",
+          ten_addon_type_to_string(addon_type), addon_name);
+    }
+
+    if (!ten_addon_try_load_specific_addon_using_all_addon_loaders(
+            addon_type, addon_name)) {
+      TEN_LOGI("Unable to load addon %s:%s using all installed addon loaders.",
+               ten_addon_type_to_string(addon_type), addon_name);
+    }
+
+    // Find again.
+    addon_host = ten_addon_store_find_by_type(addon_type, addon_name);
+  }
+
+  lock_operation_rc = ten_addon_store_unlock_by_type(addon_type);
+  TEN_ASSERT(!lock_operation_rc, "Should not happen.");
+
+  if (!addon_host) {
+    TEN_LOGE(
+        "Failed to find addon %s:%s, please make sure the addon is installed.",
+        ten_addon_type_to_string(addon_type), addon_name);
+    return false;
+  }
+
+  ten_addon_host_create_instance_async(addon_host, ten_env, instance_name, cb,
+                                       cb_data);
+
+  return true;
 }
 
-void ten_addon_on_create_instance_info_destroy(
-    ten_addon_on_create_instance_info_t *self) {
-  TEN_ASSERT(self, "Should not happen.");
+ten_addon_host_t *ten_addon_register(TEN_ADDON_TYPE addon_type,
+                                     const char *addon_name,
+                                     const char *base_dir, ten_addon_t *addon,
+                                     void *register_ctx) {
+  TEN_ASSERT(addon_type != TEN_ADDON_TYPE_INVALID, "Invalid argument.");
 
-  ten_string_deinit(&self->addon_name);
-  ten_string_deinit(&self->instance_name);
+  if (!addon_name || strlen(addon_name) == 0) {
+    TEN_LOGE("The addon name is required.");
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
+    exit(EXIT_FAILURE);
+  }
 
-  TEN_FREE(self);
-}
+  ten_addon_host_t *addon_host =
+      ten_addon_store_find_by_type(addon_type, addon_name);
+  if (addon_host) {
+    // This addon already exists; do not register it again.
+    goto done;
+  }
 
-ten_addon_on_destroy_instance_info_t *
-ten_addon_host_on_destroy_instance_info_create(
-    ten_addon_host_t *self, void *instance,
-    ten_env_addon_destroy_instance_done_cb_t cb, void *cb_data) {
-  TEN_ASSERT(self && instance, "Should not happen.");
+  addon_host = ten_addon_host_create(addon_type);
 
-  ten_addon_on_destroy_instance_info_t *info =
-      (ten_addon_on_destroy_instance_info_t *)TEN_MALLOC(
-          sizeof(ten_addon_on_destroy_instance_info_t));
-  TEN_ASSERT(info, "Failed to allocate memory.");
+  if (register_ctx) {
+    // If `register_ctx` exists, its content will be used to assist in the addon
+    // registration process.
+    ten_addon_register_ctx_t *register_ctx_ =
+        (ten_addon_register_ctx_t *)register_ctx;
+    addon_host->user_data = register_ctx_->app;
+  }
 
-  info->addon_host = self;
-  info->instance = instance;
-  info->cb = cb;
-  info->cb_data = cb_data;
+  ten_addon_store_t *addon_store = NULL;
+  switch (addon_type) {
+    case TEN_ADDON_TYPE_EXTENSION:
+      addon_store = ten_extension_get_global_store();
+      break;
+    case TEN_ADDON_TYPE_EXTENSION_GROUP:
+      addon_store = ten_extension_group_get_global_store();
+      break;
+    case TEN_ADDON_TYPE_PROTOCOL:
+      addon_store = ten_protocol_get_global_store();
+      break;
+    case TEN_ADDON_TYPE_ADDON_LOADER:
+      addon_store = ten_addon_loader_get_global_store();
+      break;
+    default:
+      break;
+  }
+  TEN_ASSERT(addon_store, "Should not happen.");
 
-  return info;
-}
+  ten_addon_store_add(addon_store, addon_host);
 
-void ten_addon_on_destroy_instance_info_destroy(
-    ten_addon_on_destroy_instance_info_t *self) {
-  TEN_ASSERT(self && self->addon_host && self->instance, "Should not happen.");
-  TEN_FREE(self);
-}
+  ten_addon_register_internal(addon_store, addon_host, addon_name, base_dir,
+                              addon);
 
-ten_addon_host_t *ten_addon_host_create(TEN_ADDON_TYPE type) {
-  ten_addon_host_t *self =
-      (ten_addon_host_t *)TEN_MALLOC(sizeof(ten_addon_host_t));
-  TEN_ASSERT(self, "Failed to allocate memory.");
-
-  self->type = type;
-  ten_addon_host_init(self);
-
-  return self;
+done:
+  return addon_host;
 }
 
 /**
@@ -318,228 +307,24 @@ ten_addon_t *ten_addon_unregister(ten_addon_store_t *store,
   return ten_addon_store_del(store, addon_name);
 }
 
-ten_addon_host_t *ten_addon_host_find(const char *addon_name,
-                                      TEN_ADDON_TYPE type) {
-  TEN_ASSERT(addon_name, "Should not happen.");
-
-  switch (type) {
-    case TEN_ADDON_TYPE_EXTENSION:
-      return ten_addon_store_find(ten_extension_get_global_store(), addon_name);
-
-    case TEN_ADDON_TYPE_EXTENSION_GROUP:
-      return ten_addon_store_find(ten_extension_group_get_global_store(),
-                                  addon_name);
-
-    case TEN_ADDON_TYPE_PROTOCOL:
-      return ten_addon_store_find(ten_protocol_get_global_store(), addon_name);
-
-    default:
-      TEN_ASSERT(0, "Should not happen.");
-      break;
-  }
-
-  return NULL;
+static void ten_addon_unregister_all_except_addon_loader_addon(void) {
+  ten_addon_unregister_all_extension();
+  ten_addon_unregister_all_extension_group();
+  ten_addon_unregister_all_protocol();
 }
 
-static ten_addon_context_t *ten_addon_context_create(void) {
-  ten_addon_context_t *self = TEN_MALLOC(sizeof(ten_addon_context_t));
-  TEN_ASSERT(self, "Failed to allocate memory.");
+void ten_unregister_all_addons_and_cleanup(void) {
+  // Since Python addons (e.g., Python extension addons) require access to the
+  // Python VM when performing `addon_t` deinitialization, and the Python addon
+  // loader will destroy the Python VM during its own destruction, the Python
+  // addon loader must only be unloaded after all other non-addon-loader types
+  // of addons have been fully unloaded. Only then can the addon loader itself
+  // be unloaded.
 
-  return self;
-}
+  ten_addon_unregister_all_except_addon_loader_addon();
 
-void ten_addon_context_destroy(ten_addon_context_t *self) {
-  TEN_ASSERT(self, "Invalid argument.");
+  // Destroy all addon loaders' singleton to avoid memory leak.
+  ten_addon_loader_addons_destroy_singleton_instance();
 
-  TEN_FREE(self);
-}
-
-/**
- * @param ten Might be the ten of the 'engine', or the ten of an extension
- * thread (group).
- * @param cb The callback when the creation is completed. Because there might be
- * more than one extension threads to create extensions from the corresponding
- * extension addons simultaneously. So we can _not_ save the function pointer
- * of @a cb into @a ten, instead we need to pass the function pointer of @a cb
- * through a parameter.
- * @param cb_data The user data of @a cb. Refer the comments of @a cb for the
- * reason why we pass the pointer of @a cb_data through a parameter rather than
- * saving it into @a ten.
- *
- * @note We will save the pointers of @a cb and @a cb_data into a 'ten' object
- * later in the call flow when the 'ten' object at that time belongs to a more
- * specific scope, so that we can minimize the parameters count then.
- */
-static void ten_addon_host_create_instance_async(
-    ten_addon_host_t *self, ten_env_t *ten_env, const char *name,
-    ten_env_addon_create_instance_done_cb_t cb, void *cb_data) {
-  TEN_ASSERT(self && ten_addon_host_check_integrity(self) && name,
-             "Should not happen.");
-  TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
-             "Should not happen.");
-
-  ten_addon_context_t *addon_context = ten_addon_context_create();
-  addon_context->caller_ten = ten_env;
-  addon_context->create_instance_done_cb = cb;
-  addon_context->create_instance_done_cb_data = cb_data;
-
-  if (self->addon->on_create_instance) {
-    TEN_ASSERT(self->addon->on_create_instance, "Should not happen.");
-    self->addon->on_create_instance(self->addon, self->ten_env, name,
-                                    addon_context);
-  } else {
-    TEN_ASSERT(0,
-               "Failed to create instance from %s, because it does not define "
-               "create() function.",
-               name);
-  }
-}
-
-/**
- * @param ten Might be the ten of the 'engine', or the ten of an extension
- * thread(group).
- * @param cb The callback when the creation is completed. Because there might be
- * more than one extension threads to create extensions from the corresponding
- * extension addons simultaneously. So we can _not_ save the function pointer
- * of @a cb into @a ten, instead we need to pass the function pointer of @a cb
- * through a parameter.
- * @param cb_data The user data of @a cb. Refer the comments of @a cb for the
- * reason why we pass the pointer of @a cb_data through a parameter rather than
- * saving it into @a ten.
- *
- * @note We will save the pointers of @a cb and @a cb_data into a 'ten' object
- * later in the call flow when the 'ten' object at that time belongs to a more
- * specific scope, so that we can minimize the parameters count then.
- */
-bool ten_addon_create_instance_async(ten_env_t *ten_env, const char *addon_name,
-                                     const char *instance_name,
-                                     TEN_ADDON_TYPE type,
-                                     ten_env_addon_create_instance_done_cb_t cb,
-                                     void *cb_data) {
-  // We increase the refcount of the 'addon' here, and will decrease the
-  // refcount in "ten_(extension/extension_group)_set_addon" after the
-  // extension/extension_group instance has been created.
-  TEN_LOGD("Try to find addon for %s", addon_name);
-
-  ten_addon_host_t *addon = ten_addon_host_find(addon_name, type);
-  if (!addon) {
-    return false;
-  }
-
-  TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
-             "Should not happen.");
-
-  ten_addon_host_create_instance_async(addon, ten_env, instance_name, cb,
-                                       cb_data);
-
-  return true;
-}
-
-/**
- * @param ten Might be the ten of the 'engine', or the ten of an extension
- * thread(group).
- * @param cb The callback when the creation is completed. Because there might be
- * more than one extension threads to create extensions from the corresponding
- * extension addons simultaneously. So we can _not_ save the function pointer
- * of @a cb into @a ten, instead we need to pass the function pointer of @a cb
- * through a parameter.
- * @param cb_data The user data of @a cb. Refer the comments of @a cb for the
- * reason why we pass the pointer of @a cb_data through a parameter rather than
- * saving it into @a ten.
- *
- * @note We will save the pointers of @a cb and @a cb_data into a 'ten' object
- * later in the call flow when the 'ten' object at that time belongs to a more
- * specific scope, so that we can minimize the parameters count then.
- */
-bool ten_addon_host_destroy_instance_async(
-    ten_addon_host_t *self, ten_env_t *ten_env, void *instance,
-    ten_env_addon_destroy_instance_done_cb_t cb, void *cb_data) {
-  TEN_ASSERT(self && ten_addon_host_check_integrity(self),
-             "Should not happen.");
-  TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
-             "Should not happen.");
-  TEN_ASSERT(instance, "Should not happen.");
-
-  ten_addon_context_t *addon_context = ten_addon_context_create();
-  addon_context->caller_ten = ten_env;
-  addon_context->destroy_instance_done_cb = cb;
-  addon_context->destroy_instance_done_cb_data = cb_data;
-
-  if (self->addon->on_destroy_instance) {
-    TEN_ASSERT(self->addon->on_destroy_instance, "Should not happen.");
-    self->addon->on_destroy_instance(self->addon, self->ten_env, instance,
-                                     addon_context);
-  } else {
-    TEN_ASSERT(0,
-               "Failed to destroy an instance from %s, because it does not "
-               "define a destroy() function.",
-               ten_string_get_raw_str(&self->name));
-  }
-
-  return true;
-}
-
-bool ten_addon_host_destroy_instance(ten_addon_host_t *self, ten_env_t *ten_env,
-                                     void *instance) {
-  TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, false),
-             "Should not happen.");
-  TEN_ASSERT(self && instance, "Should not happen.");
-  TEN_ASSERT(self->addon->on_destroy_instance, "Should not happen.");
-
-  self->addon->on_destroy_instance(self->addon, self->ten_env, instance, NULL);
-
-  return true;
-}
-
-const char *ten_addon_host_get_name(ten_addon_host_t *self) {
-  TEN_ASSERT(self && ten_addon_host_check_integrity(self), "Invalid argument.");
-  return ten_string_get_raw_str(&self->name);
-}
-
-ten_string_t *ten_addon_find_base_dir_from_app(const char *addon_type,
-                                               const char *addon_name) {
-  TEN_ASSERT(
-      addon_type && strlen(addon_type) && addon_name && strlen(addon_name),
-      "Invalid argument.");
-
-  ten_string_t *base_dir = ten_find_app_base_dir();
-  if (!base_dir || ten_string_is_empty(base_dir)) {
-    return NULL;
-  }
-
-  ten_string_set_formatted(base_dir, "%s/%s/%s/%s",
-                           ten_string_get_raw_str(base_dir),
-                           TEN_STR_TEN_PACKAGES, addon_type, addon_name);
-  ten_path_to_system_flavor(base_dir);
-
-  if (!ten_path_exists(ten_string_get_raw_str(base_dir))) {
-    // Clear the `base_dir` to avoid users to use an invalid path.
-    ten_string_destroy(base_dir);
-  }
-
-  return NULL;
-}
-
-void ten_addon_find_and_set_base_dir(ten_addon_host_t *self,
-                                     const char *start_path) {
-  TEN_ASSERT(start_path && self && ten_addon_host_check_integrity(self),
-             "Should not happen.");
-
-  ten_string_t *base_dir =
-      ten_find_base_dir(start_path, ten_addon_type_to_string(self->type),
-                        ten_string_get_raw_str(&self->name));
-  if (base_dir) {
-    ten_string_copy(&self->base_dir, base_dir);
-    ten_string_destroy(base_dir);
-  } else {
-    // If the addon's base dir cannot be found by searching upward through the
-    // parent folders, simply trust the passed-in parameter as the addon’s base
-    // dir.
-    ten_string_set_from_c_str(&self->base_dir, start_path, strlen(start_path));
-  }
-}
-
-const char *ten_addon_host_get_base_dir(ten_addon_host_t *self) {
-  TEN_ASSERT(self && ten_addon_host_check_integrity(self), "Invalid argument.");
-  return ten_string_get_raw_str(&self->base_dir);
+  ten_addon_unregister_all_addon_loader();
 }

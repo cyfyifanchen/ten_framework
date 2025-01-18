@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -36,7 +36,7 @@ static void ten_env_proxy_notify_on_deinit_done(ten_env_t *ten_env,
   //
   // About to call the Python function, so it's necessary to ensure that the
   // GIL has been acquired.
-  PyGILState_STATE prev_state = ten_py_gil_state_ensure();
+  PyGILState_STATE prev_state = ten_py_gil_state_ensure_internal();
 
   PyObject *py_res =
       PyObject_CallMethod(py_ten_env->actual_py_ten_env, "_on_release", NULL);
@@ -45,8 +45,9 @@ static void ten_env_proxy_notify_on_deinit_done(ten_env_t *ten_env,
   bool err_occurred = ten_py_check_and_clear_py_error();
   TEN_ASSERT(!err_occurred, "Should not happen.");
 
-  ten_py_gil_state_release(prev_state);
-
+  // This is already the very end, so releasing `ten_env_proxy` here is
+  // appropriate. Additionally, since the Python GIL is held, it ensures that no
+  // other Python code is currently using `ten_env`.
   if (py_ten_env->c_ten_env_proxy) {
     TEN_ASSERT(
         ten_env_proxy_get_thread_cnt(py_ten_env->c_ten_env_proxy, NULL) == 1,
@@ -59,6 +60,8 @@ static void ten_env_proxy_notify_on_deinit_done(ten_env_t *ten_env,
     bool rc = ten_env_proxy_release(ten_env_proxy, &err);
     TEN_ASSERT(rc, "Should not happen.");
   }
+
+  ten_py_gil_state_release_internal(prev_state);
 
   bool rc = ten_env_on_deinit_done(ten_env, &err);
   TEN_ASSERT(rc, "Should not happen.");
@@ -74,10 +77,10 @@ static void ten_env_proxy_notify_on_deinit_done(ten_env_t *ten_env,
       ten_py_eval_restore_thread(py_ten_env->py_thread_state);
 
       // Release the gil state and the gil.
-      ten_py_gil_state_release(PyGILState_UNLOCKED);
+      ten_py_gil_state_release_internal(PyGILState_UNLOCKED);
     } else {
       // Release the gil state but keep holding the gil.
-      ten_py_gil_state_release(PyGILState_LOCKED);
+      ten_py_gil_state_release_internal(PyGILState_LOCKED);
     }
   }
 }
@@ -95,6 +98,14 @@ PyObject *ten_py_ten_env_on_deinit_done(PyObject *self,
   if (py_ten_env->c_ten_env->attach_to == TEN_ENV_ATTACH_TO_ADDON) {
     rc = ten_env_on_deinit_done(py_ten_env->c_ten_env, &err);
   } else {
+    if (!py_ten_env->c_ten_env_proxy) {
+      // Avoid memory leak.
+      ten_error_deinit(&err);
+
+      return ten_py_raise_py_value_error_exception(
+          "ten_env.on_deinit_done() failed because ten_env_proxy is invalid.");
+    }
+
     rc = ten_env_proxy_notify(py_ten_env->c_ten_env_proxy,
                               ten_env_proxy_notify_on_deinit_done, py_ten_env,
                               false, &err);

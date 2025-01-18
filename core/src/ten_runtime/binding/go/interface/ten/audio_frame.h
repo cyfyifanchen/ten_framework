@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -69,7 +69,8 @@ ten_go_error_t ten_go_audio_frame_is_eof(uintptr_t bridge_addr, bool *is_eof);
 ten_go_error_t ten_go_audio_frame_alloc_buf(uintptr_t bridge_addr, int size);
 
 ten_go_error_t ten_go_audio_frame_get_buf(uintptr_t bridge_addr,
-                                          const void *buf_addr, int buf_size);
+                                          const void *buf_addr,
+                                          uint64_t buf_size);
 
 ten_go_error_t ten_go_audio_frame_lock_buf(uintptr_t bridge_addr,
                                            uint8_t **buf_addr,
@@ -77,3 +78,6 @@ ten_go_error_t ten_go_audio_frame_lock_buf(uintptr_t bridge_addr,
 
 ten_go_error_t ten_go_audio_frame_unlock_buf(uintptr_t bridge_addr,
                                              const void *buf_addr);
+
+ten_go_error_t ten_go_audio_frame_get_buf_size(uintptr_t bridge_addr,
+                                               uint64_t *buf_size);

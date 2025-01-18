@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -29,13 +29,10 @@ class error_t {
   error_t(error_t &&) = delete;
   error_t &operator=(error_t &&) = delete;
 
-  void reset() { ten_error_reset(c_error); }
-
-  bool is_success() { return ten_error_is_success(c_error); }
-
-  const char *errmsg() { return ten_error_errmsg(c_error); }
+  const char *err_msg() { return ten_error_errmsg(c_error); }
 
   // Internal use only.
+  bool is_success() { return ten_error_is_success(c_error); }
   ten_error_t *get_c_error() { return c_error; }
 
  private:

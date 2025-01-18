@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -22,4 +22,7 @@ ten_go_error_t ten_go_data_unlock_buf(uintptr_t bridge_addr,
                                       const void *buf_addr);
 
 ten_go_error_t ten_go_data_get_buf(uintptr_t bridge_addr, const void *buf_addr,
-                                   int buf_size);
+                                   uint64_t buf_size);
+
+ten_go_error_t ten_go_data_get_buf_size(uintptr_t bridge_addr,
+                                        uint64_t *buf_size);

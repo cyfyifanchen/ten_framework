@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -62,4 +62,4 @@ TEN_RUNTIME_API bool ten_video_frame_set_pixel_fmt(ten_shared_ptr_t *self,
 TEN_RUNTIME_API uint8_t *ten_video_frame_alloc_data(ten_shared_ptr_t *self,
                                                     size_t size);
 
-TEN_RUNTIME_API ten_buf_t *ten_video_frame_peek_data(ten_shared_ptr_t *self);
+TEN_RUNTIME_API ten_buf_t *ten_video_frame_peek_buf(ten_shared_ptr_t *self);

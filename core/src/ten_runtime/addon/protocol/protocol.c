@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -7,6 +7,7 @@
 #include "include_internal/ten_runtime/addon/protocol/protocol.h"
 
 #include "include_internal/ten_runtime/addon/addon.h"
+#include "include_internal/ten_runtime/addon/addon_host.h"
 #include "include_internal/ten_runtime/addon/common/store.h"
 #include "include_internal/ten_runtime/common/constant_str.h"
 #include "include_internal/ten_runtime/protocol/protocol.h"
@@ -40,17 +41,11 @@ ten_addon_t *ten_addon_unregister_protocol(const char *name) {
   return ten_addon_unregister(ten_protocol_get_global_store(), name);
 }
 
-void ten_addon_register_protocol(const char *name, const char *base_dir,
-                                 ten_addon_t *addon) {
-  ten_addon_host_t *addon_host =
-      (ten_addon_host_t *)TEN_MALLOC(sizeof(ten_addon_host_t));
-  TEN_ASSERT(addon_host, "Failed to allocate memory.");
-
-  addon_host->type = TEN_ADDON_TYPE_PROTOCOL;
-  ten_addon_host_init(addon_host);
-
-  ten_addon_register(ten_protocol_get_global_store(), addon_host, name,
-                     base_dir, addon);
+ten_addon_host_t *ten_addon_register_protocol(const char *name,
+                                              const char *base_dir,
+                                              ten_addon_t *addon) {
+  return ten_addon_register(TEN_ADDON_TYPE_PROTOCOL, name, base_dir, addon,
+                            NULL);
 }
 
 static bool ten_addon_protocol_match_protocol(ten_addon_host_t *self,
@@ -113,36 +108,36 @@ ten_addon_host_t *ten_addon_protocol_find(const char *protocol) {
   return result;
 }
 
-static ten_addon_create_protocol_info_t *ten_addon_create_protocol_info_create(
+static ten_addon_create_protocol_ctx_t *ten_addon_create_protocol_ctx_create(
     const char *uri, TEN_PROTOCOL_ROLE role,
     ten_env_addon_on_create_protocol_async_cb_t cb, void *user_data) {
   TEN_ASSERT(role > TEN_PROTOCOL_ROLE_INVALID, "Should not happen.");
 
-  ten_addon_create_protocol_info_t *info =
-      (ten_addon_create_protocol_info_t *)TEN_MALLOC(
-          sizeof(ten_addon_create_protocol_info_t));
-  TEN_ASSERT(info, "Failed to allocate memory.");
+  ten_addon_create_protocol_ctx_t *ctx =
+      (ten_addon_create_protocol_ctx_t *)TEN_MALLOC(
+          sizeof(ten_addon_create_protocol_ctx_t));
+  TEN_ASSERT(ctx, "Failed to allocate memory.");
 
   if (!uri || strlen(uri) == 0) {
-    ten_string_init(&info->uri);
+    ten_string_init(&ctx->uri);
   } else {
-    ten_string_init_formatted(&info->uri, "%s", uri);
+    ten_string_init_formatted(&ctx->uri, "%s", uri);
   }
 
-  info->role = role;
-  info->cb = cb;
-  info->user_data = user_data;
+  ctx->role = role;
+  ctx->cb = cb;
+  ctx->user_data = user_data;
 
-  return info;
+  return ctx;
 }
 
-static void ten_addon_create_protocol_info_destroy(
-    ten_addon_create_protocol_info_t *info) {
-  TEN_ASSERT(info, "Should not happen.");
+static void ten_addon_create_protocol_ctx_destroy(
+    ten_addon_create_protocol_ctx_t *ctx) {
+  TEN_ASSERT(ctx, "Should not happen.");
 
-  ten_string_deinit(&info->uri);
+  ten_string_deinit(&ctx->uri);
 
-  TEN_FREE(info);
+  TEN_FREE(ctx);
 }
 
 static void proxy_on_addon_protocol_created(ten_env_t *ten_env, void *instance,
@@ -150,27 +145,27 @@ static void proxy_on_addon_protocol_created(ten_env_t *ten_env, void *instance,
   TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
              "Should not happen.");
 
-  ten_addon_create_protocol_info_t *info =
-      (ten_addon_create_protocol_info_t *)cb_data;
-  TEN_ASSERT(info, "Should not happen.");
+  ten_addon_create_protocol_ctx_t *ctx =
+      (ten_addon_create_protocol_ctx_t *)cb_data;
+  TEN_ASSERT(ctx, "Should not happen.");
 
   ten_protocol_t *protocol = instance;
   if (protocol) {
     ten_protocol_determine_default_property_value(protocol);
 
-    if (!ten_string_is_empty(&info->uri)) {
+    if (!ten_string_is_empty(&ctx->uri)) {
       ten_string_set_formatted(&protocol->uri, "%s",
-                               ten_string_get_raw_str(&info->uri));
+                               ten_string_get_raw_str(&ctx->uri));
     }
 
-    protocol->role = info->role;
+    protocol->role = ctx->role;
   }
 
-  if (info->cb) {
-    info->cb(ten_env, protocol, info->user_data);
+  if (ctx->cb) {
+    ctx->cb(ten_env, protocol, ctx->user_data);
   }
 
-  ten_addon_create_protocol_info_destroy(info);
+  ten_addon_create_protocol_ctx_destroy(ctx);
 }
 
 bool ten_addon_create_protocol_with_uri(
@@ -214,19 +209,20 @@ bool ten_addon_create_protocol_with_uri(
 
   ten_string_destroy(protocol_str);
 
-  ten_addon_create_protocol_info_t *info =
-      ten_addon_create_protocol_info_create(uri, role, cb, user_data);
-  TEN_ASSERT(info, "Failed to allocate memory.");
+  ten_addon_create_protocol_ctx_t *ctx =
+      ten_addon_create_protocol_ctx_create(uri, role, cb, user_data);
+  TEN_ASSERT(ctx, "Failed to allocate memory.");
 
-  bool rc = ten_addon_create_instance_async(
-      ten_env, ten_string_get_raw_str(&addon_host->name),
-      ten_string_get_raw_str(&addon_host->name), TEN_ADDON_TYPE_PROTOCOL,
-      proxy_on_addon_protocol_created, info);
+  bool rc =
+      ten_addon_create_instance_async(ten_env, TEN_ADDON_TYPE_PROTOCOL,
+                                      ten_string_get_raw_str(&addon_host->name),
+                                      ten_string_get_raw_str(&addon_host->name),
+                                      proxy_on_addon_protocol_created, ctx);
 
   if (!rc) {
     TEN_ENV_LOG_ERROR_INTERNAL(ten_env, "Failed to create protocol for %s",
                                uri);
-    ten_addon_create_protocol_info_destroy(info);
+    ten_addon_create_protocol_ctx_destroy(ctx);
 
     if (err) {
       ten_error_set(err, TEN_ERRNO_GENERIC,
@@ -260,17 +256,17 @@ bool ten_addon_create_protocol(ten_env_t *ten_env, const char *addon_name,
 
   TEN_LOGD("Loading protocol addon: %s", addon_name);
 
-  ten_addon_create_protocol_info_t *info =
-      ten_addon_create_protocol_info_create(NULL, role, cb, user_data);
-  TEN_ASSERT(info, "Failed to allocate memory.");
+  ten_addon_create_protocol_ctx_t *ctx =
+      ten_addon_create_protocol_ctx_create(NULL, role, cb, user_data);
+  TEN_ASSERT(ctx, "Failed to allocate memory.");
 
   bool rc = ten_addon_create_instance_async(
-      ten_env, addon_name, instance_name, TEN_ADDON_TYPE_PROTOCOL,
-      proxy_on_addon_protocol_created, info);
+      ten_env, TEN_ADDON_TYPE_PROTOCOL, addon_name, instance_name,
+      proxy_on_addon_protocol_created, ctx);
 
   if (!rc) {
     TEN_LOGE("Failed to create protocol for %s", addon_name);
-    ten_addon_create_protocol_info_destroy(info);
+    ten_addon_create_protocol_ctx_destroy(ctx);
 
     if (err) {
       ten_error_set(err, TEN_ERRNO_GENERIC,
@@ -280,4 +276,8 @@ bool ten_addon_create_protocol(ten_env_t *ten_env, const char *addon_name,
   }
 
   return true;
+}
+
+void ten_addon_unregister_all_protocol(void) {
+  ten_addon_store_del_all(ten_protocol_get_global_store());
 }

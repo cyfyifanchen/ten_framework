@@ -1,5 +1,5 @@
 #
-# Copyright © 2024 Agora
+# Copyright © 2025 Agora
 # This file is part of TEN Framework, an open source project.
 # Licensed under the Apache License, Version 2.0, with certain conditions.
 # Refer to the "LICENSE" file in the root directory for more information.
@@ -19,6 +19,7 @@ group("python") {
     deps += [
       "aio_http_server_python",
       "async_extension_basic_python",
+      "async_get_set_prop_python",
       "async_io_basic_python",
       "cpp_app_multi_process_python",
       "cpp_app_python",
@@ -38,9 +39,11 @@ group("python") {
       "send_data_python",
       "send_recv_image_python",
       "send_recv_pcm_python",
+      "standalone_test_async_python",
       "standalone_test_python",
       "two_async_exts_one_group_python",
       "two_async_exts_python",
+      "websocket_server_python",
     ]
 
     if (ten_enable_python_binding && ten_enable_go_binding) {

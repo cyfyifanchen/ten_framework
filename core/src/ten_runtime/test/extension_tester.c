@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -57,8 +57,18 @@ bool ten_extension_tester_check_integrity(ten_extension_tester_t *self,
   return true;
 }
 
+bool ten_extension_tester_thread_call_by_me(ten_extension_tester_t *self) {
+  TEN_ASSERT(self, "Invalid argument.");
+  TEN_ASSERT(ten_extension_tester_check_integrity(self, false),
+             "Invalid argument.");
+
+  return ten_thread_equal(NULL, ten_sanitizer_thread_check_get_belonging_thread(
+                                    &self->thread_check));
+}
+
 ten_extension_tester_t *ten_extension_tester_create(
     ten_extension_tester_on_start_func_t on_start,
+    ten_extension_tester_on_stop_func_t on_stop,
     ten_extension_tester_on_cmd_func_t on_cmd,
     ten_extension_tester_on_data_func_t on_data,
     ten_extension_tester_on_audio_frame_func_t on_audio_frame,
@@ -74,6 +84,7 @@ ten_extension_tester_t *ten_extension_tester_create(
   ten_list_init(&self->addon_base_dirs);
 
   self->on_start = on_start;
+  self->on_stop = on_stop;
   self->on_cmd = on_cmd;
   self->on_data = on_data;
   self->on_audio_frame = on_audio_frame;
@@ -174,7 +185,11 @@ void test_app_ten_env_send_cmd(ten_env_t *ten_env, void *user_data) {
 
 static void ten_extension_tester_destroy_test_target(
     ten_extension_tester_t *self) {
-  TEN_ASSERT(self && ten_extension_tester_check_integrity(self, true),
+  TEN_ASSERT(self &&
+                 // TEN_NOLINTNEXTLINE(thread-check)
+                 // thread-check: In TEN world, the destroy operations need to
+                 // be performed in any threads.
+                 ten_extension_tester_check_integrity(self, false),
              "Invalid argument.");
 
   if (self->test_mode == TEN_EXTENSION_TESTER_TEST_MODE_SINGLE) {
@@ -186,7 +201,11 @@ static void ten_extension_tester_destroy_test_target(
 }
 
 void ten_extension_tester_destroy(ten_extension_tester_t *self) {
-  TEN_ASSERT(self && ten_extension_tester_check_integrity(self, true),
+  TEN_ASSERT(self &&
+                 // TEN_NOLINTNEXTLINE(thread-check)
+                 // thread-check: In TEN world, the destroy operations need to
+                 // be performed in any threads.
+                 ten_extension_tester_check_integrity(self, false),
              "Invalid argument.");
 
   TEN_ASSERT(self->test_app_ten_env_proxy == NULL,
@@ -417,6 +436,19 @@ void ten_extension_tester_on_start_done(ten_extension_tester_t *self) {
   TEN_ASSERT(rc, "Should not happen.");
 }
 
+void ten_extension_tester_on_stop_done(ten_extension_tester_t *self) {
+  TEN_ASSERT(self && ten_extension_tester_check_integrity(self, true),
+             "Invalid argument.");
+
+  TEN_LOGI("tester on_stop() done.");
+
+  bool rc = ten_env_proxy_notify(
+      self->test_extension_ten_env_proxy,
+      ten_builtin_test_extension_ten_env_notify_on_stop_done, NULL, false,
+      NULL);
+  TEN_ASSERT(rc, "Should not happen.");
+}
+
 void ten_extension_tester_on_test_extension_start(
     ten_extension_tester_t *self) {
   TEN_ASSERT(self && ten_extension_tester_check_integrity(self, true),
@@ -426,6 +458,17 @@ void ten_extension_tester_on_test_extension_start(
     self->on_start(self, self->ten_env_tester);
   } else {
     ten_extension_tester_on_start_done(self);
+  }
+}
+
+void ten_extension_tester_on_test_extension_stop(ten_extension_tester_t *self) {
+  TEN_ASSERT(self && ten_extension_tester_check_integrity(self, true),
+             "Invalid argument.");
+
+  if (self->on_stop) {
+    self->on_stop(self, self->ten_env_tester);
+  } else {
+    ten_extension_tester_on_stop_done(self);
   }
 }
 
@@ -485,8 +528,9 @@ bool ten_extension_tester_run(ten_extension_tester_t *self) {
   // Inject the task that calls the first task into the runloop of
   // extension_tester, ensuring that the first task is called within the
   // extension_tester thread to guarantee thread safety.
-  ten_runloop_post_task_tail(self->tester_runloop,
-                             ten_extension_tester_on_first_task, self, NULL);
+  int rc = ten_runloop_post_task_tail(
+      self->tester_runloop, ten_extension_tester_on_first_task, self, NULL);
+  TEN_ASSERT(!rc, "Should not happen.");
 
   // Start the runloop of tester.
   ten_runloop_run(self->tester_runloop);

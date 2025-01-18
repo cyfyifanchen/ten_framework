@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -25,6 +25,11 @@
 #include "ten_utils/value/value.h"
 
 #define TEN_EXTENSION_SIGNATURE 0xE1627776E09A723CU
+
+// In most modern operating systems, `-1` is not a valid user-space address.
+// Therefore, we use this tricky approach to represent the value of a pointer to
+// an extension that was not successfully created.
+#define TEN_EXTENSION_UNSUCCESSFULLY_CREATED ((ten_extension_t *)-1)
 
 typedef struct ten_env_t ten_env_t;
 typedef struct ten_extension_t ten_extension_t;
@@ -60,8 +65,14 @@ typedef struct ten_timer_t ten_timer_t;
 typedef enum TEN_EXTENSION_STATE {
   TEN_EXTENSION_STATE_INIT,
 
+  // on_configure() is called.
+  TEN_EXTENSION_STATE_ON_CONFIGURE,
+
   // on_configure_done() is completed.
   TEN_EXTENSION_STATE_ON_CONFIGURE_DONE,
+
+  // on_init() is called.
+  TEN_EXTENSION_STATE_ON_INIT,
 
   // on_init_done() is completed.
   TEN_EXTENSION_STATE_ON_INIT_DONE,
@@ -71,6 +82,9 @@ typedef enum TEN_EXTENSION_STATE {
 
   // on_start_done() is completed.
   TEN_EXTENSION_STATE_ON_START_DONE,
+
+  // on_stop() is called.
+  TEN_EXTENSION_STATE_ON_STOP,
 
   // on_stop_done() is completed.
   TEN_EXTENSION_STATE_ON_STOP_DONE,
@@ -244,7 +258,7 @@ TEN_RUNTIME_PRIVATE_API ten_path_in_t *
 ten_extension_get_cmd_return_path_from_itself(ten_extension_t *self,
                                               const char *cmd_id);
 
-TEN_RUNTIME_PRIVATE_API bool ten_extension_handle_out_msg(
+TEN_RUNTIME_PRIVATE_API bool ten_extension_dispatch_msg(
     ten_extension_t *extension, ten_shared_ptr_t *msg, ten_error_t *err);
 
 TEN_RUNTIME_PRIVATE_API ten_runloop_t *ten_extension_get_attached_runloop(

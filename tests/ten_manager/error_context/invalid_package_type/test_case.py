@@ -1,5 +1,5 @@
 #
-# Copyright © 2024 Agora
+# Copyright © 2025 Agora
 # This file is part of TEN Framework, an open source project.
 # Licensed under the Apache License, Version 2.0, with certain conditions.
 # Refer to the "LICENSE" file in the root directory for more information.
@@ -35,6 +35,7 @@ def test_invalid_package_type():
         cmds = [
             tman_bin,
             f"--config-file={config_file}",
+            "--yes",
             "install",
         ]
         returncode, _ = cmd_exec.get_cmd_output(" ".join(cmds))

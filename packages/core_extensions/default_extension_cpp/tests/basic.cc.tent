@@ -10,7 +10,7 @@
 
 namespace {
 
-class {{package_name}}_extension_tester : public ten::extension_tester_t {
+class {{package_name}}_tester : public ten::extension_tester_t {
  public:
   void on_start(ten::ten_env_tester_t &ten_env) override {
     // Send the first command to the extension.
@@ -30,18 +30,8 @@ class {{package_name}}_extension_tester : public ten::extension_tester_t {
 }  // namespace
 
 TEST(Test, Basic) {  // NOLINT
-  auto *tester = new {{package_name}}_extension_tester();
-
-  ten_string_t *path = ten_path_get_executable_path();
-  ten_path_join_c_str(path, "../ten_packages/extension/{{package_name}}_extension_cpp/");
-
-  tester->add_addon_base_dir(ten_string_get_raw_str(path));
-
-  ten_string_destroy(path);
-
-  tester->set_test_mode_single("{{package_name}}_extension_cpp");
-
+  auto *tester = new {{package_name}}_tester();
+  tester->set_test_mode_single("{{package_name}}");
   tester->run();
-
   delete tester;
 }

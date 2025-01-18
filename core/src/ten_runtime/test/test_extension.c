@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -8,6 +8,7 @@
 #include <stdlib.h>
 
 #include "include_internal/ten_runtime/addon/addon.h"
+#include "include_internal/ten_runtime/addon/extension/extension.h"
 #include "include_internal/ten_runtime/addon/extension_group/extension_group.h"
 #include "include_internal/ten_runtime/common/constant_str.h"
 #include "include_internal/ten_runtime/extension/extension.h"
@@ -16,7 +17,6 @@
 #include "include_internal/ten_runtime/test/env_tester.h"
 #include "include_internal/ten_runtime/test/extension_tester.h"
 #include "ten_runtime/addon/addon.h"
-#include "ten_runtime/extension_group/extension_group.h"
 #include "ten_runtime/ten.h"
 #include "ten_runtime/ten_env/internal/log.h"
 #include "ten_runtime/ten_env/internal/on_xxx_done.h"
@@ -65,6 +65,15 @@ static void ten_extension_tester_on_test_extension_start_task(
   ten_extension_tester_on_test_extension_start(tester);
 }
 
+static void ten_extension_tester_on_test_extension_stop_task(void *self_,
+                                                             void *arg) {
+  ten_extension_tester_t *tester = self_;
+  TEN_ASSERT(tester && ten_extension_tester_check_integrity(tester, true),
+             "Invalid argument.");
+
+  ten_extension_tester_on_test_extension_stop(tester);
+}
+
 static void test_extension_on_start(ten_extension_t *self, ten_env_t *ten_env) {
   TEN_ASSERT(self && ten_env, "Invalid argument.");
 
@@ -75,9 +84,26 @@ static void test_extension_on_start(ten_extension_t *self, ten_env_t *ten_env) {
       test_extension_get_extension_tester_ptr(ten_env);
   self->user_data = tester;
 
-  ten_runloop_post_task_tail(tester->tester_runloop,
-                             ten_extension_tester_on_test_extension_start_task,
-                             tester, NULL);
+  int rc = ten_runloop_post_task_tail(
+      tester->tester_runloop, ten_extension_tester_on_test_extension_start_task,
+      tester, NULL);
+  TEN_ASSERT(!rc, "Should not happen.");
+}
+
+static void test_extension_on_stop(ten_extension_t *self, ten_env_t *ten_env) {
+  TEN_ASSERT(self && ten_env, "Invalid argument.");
+
+  // The tester framework needs to ensure that the tester's environment is
+  // always destroyed later than the test_extension, so calling the tester
+  // within the test_extension is always valid.
+  ten_extension_tester_t *tester =
+      test_extension_get_extension_tester_ptr(ten_env);
+  self->user_data = tester;
+
+  int rc = ten_runloop_post_task_tail(
+      tester->tester_runloop, ten_extension_tester_on_test_extension_stop_task,
+      tester, NULL);
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 void ten_builtin_test_extension_ten_env_notify_on_start_done(
@@ -86,6 +112,15 @@ void ten_builtin_test_extension_ten_env_notify_on_start_done(
              "Should not happen.");
 
   bool rc = ten_env_on_start_done(ten_env, NULL);
+  TEN_ASSERT(rc, "Should not happen.");
+}
+
+void ten_builtin_test_extension_ten_env_notify_on_stop_done(ten_env_t *ten_env,
+                                                            void *user_data) {
+  TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
+             "Should not happen.");
+
+  bool rc = ten_env_on_stop_done(ten_env, NULL);
   TEN_ASSERT(rc, "Should not happen.");
 }
 
@@ -114,9 +149,10 @@ static void test_extension_on_cmd(ten_extension_t *self, ten_env_t *ten_env,
              "Should not happen.");
 
   // Inject cmd into the extension_tester thread to ensure thread safety.
-  ten_runloop_post_task_tail(tester->tester_runloop,
-                             ten_extension_tester_on_test_extension_cmd_task,
-                             tester, ten_shared_ptr_clone(cmd));
+  int rc = ten_runloop_post_task_tail(
+      tester->tester_runloop, ten_extension_tester_on_test_extension_cmd_task,
+      tester, ten_shared_ptr_clone(cmd));
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 static void ten_extension_tester_on_test_extension_data_task(void *self_,
@@ -144,9 +180,10 @@ static void test_extension_on_data(ten_extension_t *self, ten_env_t *ten_env,
              "Should not happen.");
 
   // Inject data into the extension_tester thread to ensure thread safety.
-  ten_runloop_post_task_tail(tester->tester_runloop,
-                             ten_extension_tester_on_test_extension_data_task,
-                             tester, ten_shared_ptr_clone(data));
+  int rc = ten_runloop_post_task_tail(
+      tester->tester_runloop, ten_extension_tester_on_test_extension_data_task,
+      tester, ten_shared_ptr_clone(data));
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 static void ten_extension_tester_on_test_extension_audio_frame_task(void *self_,
@@ -176,10 +213,11 @@ static void test_extension_on_audio_frame(ten_extension_t *self,
 
   // Inject audio_frame into the extension_tester thread to ensure thread
   // safety.
-  ten_runloop_post_task_tail(
+  int rc = ten_runloop_post_task_tail(
       tester->tester_runloop,
       ten_extension_tester_on_test_extension_audio_frame_task, tester,
       ten_shared_ptr_clone(audio_frame));
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 static void ten_extension_tester_on_test_extension_video_frame_task(void *self_,
@@ -209,10 +247,11 @@ static void test_extension_on_video_frame(ten_extension_t *self,
 
   // Inject video_frame into the extension_tester thread to ensure thread
   // safety.
-  ten_runloop_post_task_tail(
+  int rc = ten_runloop_post_task_tail(
       tester->tester_runloop,
       ten_extension_tester_on_test_extension_video_frame_task, tester,
       ten_shared_ptr_clone(video_frame));
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 static void ten_extension_tester_on_test_extension_deinit_task(
@@ -235,9 +274,10 @@ static void test_extension_on_deinit(ten_extension_t *self,
   TEN_ASSERT(tester && ten_extension_tester_check_integrity(tester, false),
              "Should not happen.");
 
-  ten_runloop_post_task_tail(tester->tester_runloop,
-                             ten_extension_tester_on_test_extension_deinit_task,
-                             tester, NULL);
+  int post_status = ten_runloop_post_task_tail(
+      tester->tester_runloop,
+      ten_extension_tester_on_test_extension_deinit_task, tester, NULL);
+  TEN_ASSERT(!post_status, "Should not happen.");
 
   // It is safe to call on_deinit_done here, because as long as the
   // ten_env_proxy has not been destroyed, the test_extension will not be
@@ -255,9 +295,10 @@ static void test_extension_addon_create_instance(ten_addon_t *addon,
   TEN_ASSERT(addon && name, "Invalid argument.");
 
   ten_extension_t *extension = ten_extension_create(
-      name, test_extension_on_configure, NULL, test_extension_on_start, NULL,
-      test_extension_on_deinit, test_extension_on_cmd, test_extension_on_data,
-      test_extension_on_audio_frame, test_extension_on_video_frame, NULL);
+      name, test_extension_on_configure, NULL, test_extension_on_start,
+      test_extension_on_stop, test_extension_on_deinit, test_extension_on_cmd,
+      test_extension_on_data, test_extension_on_audio_frame,
+      test_extension_on_video_frame, NULL);
 
   ten_env_on_create_instance_done(ten_env, extension, context, NULL);
 }
@@ -288,8 +329,4 @@ static ten_addon_t ten_builtin_test_extension_addon = {
 void ten_builtin_test_extension_addon_register(void) {
   ten_addon_register_extension(TEN_STR_TEN_TEST_EXTENSION, NULL,
                                &ten_builtin_test_extension_addon, NULL);
-}
-
-void ten_builtin_test_extension_addon_unregister(void) {
-  ten_addon_unregister_extension(TEN_STR_TEN_TEST_EXTENSION);
 }

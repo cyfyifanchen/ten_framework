@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -12,7 +12,6 @@
 #include "include_internal/ten_runtime/extension_group/extension_group.h"
 #include "include_internal/ten_runtime/ten_env/ten_env.h"
 #include "include_internal/ten_runtime/ten_env_proxy/ten_env_proxy.h"
-#include "ten_runtime/addon/extension/extension.h"
 #include "ten_runtime/binding/go/interface/ten/common.h"
 #include "ten_runtime/binding/go/interface/ten/ten_env.h"
 #include "ten_runtime/ten.h"
@@ -53,9 +52,9 @@ typedef struct ten_go_ten_env_t {
   ten_rwlock_t *lock;
 } ten_go_ten_env_t;
 
-typedef struct ten_go_callback_info_t {
+typedef struct ten_go_callback_ctx_t {
   ten_go_handle_t callback_id;
-} ten_go_callback_info_t;
+} ten_go_callback_ctx_t;
 
 extern void tenGoOnCmdResult(ten_go_handle_t ten_env_bridge,
                              ten_go_handle_t cmd_result_bridge,
@@ -66,11 +65,11 @@ extern void tenGoOnError(ten_go_handle_t ten_env_bridge,
                          ten_go_handle_t error_handler,
                          ten_go_error_t cgo_error);
 
-TEN_RUNTIME_PRIVATE_API ten_go_callback_info_t *ten_go_callback_info_create(
+TEN_RUNTIME_PRIVATE_API ten_go_callback_ctx_t *ten_go_callback_ctx_create(
     ten_go_handle_t handler_id);
 
-TEN_RUNTIME_PRIVATE_API void ten_go_callback_info_destroy(
-    ten_go_callback_info_t *self);
+TEN_RUNTIME_PRIVATE_API void ten_go_callback_ctx_destroy(
+    ten_go_callback_ctx_t *self);
 
 TEN_RUNTIME_PRIVATE_API void proxy_send_xxx_callback(
     ten_env_t *ten_env, ten_shared_ptr_t *cmd_result, void *callback_info,

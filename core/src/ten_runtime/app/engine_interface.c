@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -38,9 +38,10 @@ static void ten_app_check_termination_when_engine_closed_async(
                  ten_app_check_integrity(self, false),
              "Should not happen.");
 
-  ten_runloop_post_task_tail(ten_app_get_attached_runloop(self),
-                             ten_app_check_termination_when_engine_closed_,
-                             self, engine);
+  int rc = ten_runloop_post_task_tail(
+      ten_app_get_attached_runloop(self),
+      ten_app_check_termination_when_engine_closed_, self, engine);
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 // This function is called in the engine thread.

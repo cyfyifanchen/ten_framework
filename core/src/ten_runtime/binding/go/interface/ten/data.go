@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -26,7 +26,6 @@ type Data interface {
 
 type data struct {
 	*msg
-	size int
 }
 
 func newData(bridge C.uintptr_t) *data {
@@ -79,10 +78,6 @@ func (p *data) AllocBuf(size int) error {
 		return withCGoError(&apiStatus)
 	})
 
-	if err == nil {
-		p.size = size
-	}
-
 	return err
 }
 
@@ -133,16 +128,27 @@ func (p *data) UnlockBuf(buf *[]byte) error {
 }
 
 func (p *data) GetBuf() ([]byte, error) {
-	if p.size == 0 {
-		return nil, newTenError(ErrnoInvalidArgument, "call AllocBuf() first")
+	var bufSize C.uint64_t
+
+	err := withCGOLimiter(func() error {
+		apiStatus := C.ten_go_data_get_buf_size(p.getCPtr(), &bufSize)
+		return withCGoError(&apiStatus)
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
-	buf := make([]byte, p.size)
-	err := withCGOLimiter(func() error {
+	if bufSize == 0 {
+		return make([]byte, 0), nil
+	}
+
+	buf := make([]byte, bufSize)
+	err = withCGOLimiter(func() error {
 		apiStatus := C.ten_go_data_get_buf(
 			p.getCPtr(),
 			unsafe.Pointer(&buf[0]),
-			C.int(p.size),
+			bufSize,
 		)
 
 		return withCGoError(&apiStatus)

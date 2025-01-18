@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -151,7 +151,7 @@ TEN_CPP_REGISTER_ADDON_AS_EXTENSION(
 
 }  // namespace
 
-TEST(ExtensionTest, MultiDestRespWhenAllInMultiApp) {  // NOLINT
+TEST(MultiDestTest, MultiDestRespWhenAllInMultiApp) {  // NOLINT
   // Start app.
   auto *app_3_thread =
       ten_thread_create("app thread 3", app_thread_3_main, nullptr);

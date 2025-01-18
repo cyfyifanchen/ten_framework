@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -110,10 +110,6 @@ TEN_RUNTIME_PRIVATE_API ten_loc_t *ten_raw_msg_get_src_loc(ten_msg_t *self);
 
 TEN_RUNTIME_PRIVATE_API ten_loc_t *ten_raw_msg_get_first_dest_loc(
     ten_msg_t *self);
-
-TEN_RUNTIME_PRIVATE_API void ten_raw_msg_set_src(
-    ten_msg_t *self, const char *app_uri, const char *graph_id,
-    const char *extension_group_name, const char *extension_name);
 
 TEN_RUNTIME_PRIVATE_API void ten_msg_set_src(ten_shared_ptr_t *self,
                                              const char *app_uri,

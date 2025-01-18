@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -10,41 +10,56 @@
 #include "include_internal/ten_runtime/binding/python/ten_env/ten_env.h"
 #include "include_internal/ten_runtime/ten_env/log.h"
 #include "ten_runtime/ten_env/internal/log.h"
+#include "ten_utils/lib/error.h"
 #include "ten_utils/macro/check.h"
 #include "ten_utils/macro/memory.h"
 
-typedef struct ten_env_notify_log_info_t {
+typedef struct ten_env_notify_log_ctx_t {
   int32_t level;
-  const char *func_name;
-  const char *file_name;
+  ten_string_t func_name;
+  ten_string_t file_name;
   size_t line_no;
-  const char *msg;
-  ten_event_t *completed;
-} ten_env_notify_log_info_t;
+  ten_string_t msg;
+} ten_env_notify_log_ctx_t;
 
-static ten_env_notify_log_info_t *ten_env_notify_log_info_create(
+static ten_env_notify_log_ctx_t *ten_env_notify_log_ctx_create(
     int32_t level, const char *func_name, const char *file_name, size_t line_no,
     const char *msg) {
-  ten_env_notify_log_info_t *info =
-      TEN_MALLOC(sizeof(ten_env_notify_log_info_t));
-  TEN_ASSERT(info, "Failed to allocate memory.");
+  ten_env_notify_log_ctx_t *ctx = TEN_MALLOC(sizeof(ten_env_notify_log_ctx_t));
+  TEN_ASSERT(ctx, "Failed to allocate memory.");
 
-  info->level = level;
-  info->func_name = func_name;
-  info->file_name = file_name;
-  info->line_no = line_no;
-  info->msg = msg;
-  info->completed = ten_event_create(0, 1);
+  ctx->level = level;
 
-  return info;
+  if (func_name) {
+    ten_string_init_from_c_str(&ctx->func_name, func_name, strlen(func_name));
+  } else {
+    ten_string_init(&ctx->func_name);
+  }
+
+  if (file_name) {
+    ten_string_init_from_c_str(&ctx->file_name, file_name, strlen(file_name));
+  } else {
+    ten_string_init(&ctx->file_name);
+  }
+  ctx->line_no = line_no;
+
+  if (msg) {
+    ten_string_init_from_c_str(&ctx->msg, msg, strlen(msg));
+  } else {
+    ten_string_init(&ctx->msg);
+  }
+
+  return ctx;
 }
 
-static void ten_env_notify_log_info_destroy(ten_env_notify_log_info_t *info) {
-  TEN_ASSERT(info, "Invalid argument.");
+static void ten_env_notify_log_ctx_destroy(ten_env_notify_log_ctx_t *ctx) {
+  TEN_ASSERT(ctx, "Invalid argument.");
 
-  ten_event_destroy(info->completed);
+  ten_string_deinit(&ctx->func_name);
+  ten_string_deinit(&ctx->file_name);
+  ten_string_deinit(&ctx->msg);
 
-  TEN_FREE(info);
+  TEN_FREE(ctx);
 }
 
 static void ten_env_proxy_notify_log(ten_env_t *ten_env, void *user_data) {
@@ -52,13 +67,14 @@ static void ten_env_proxy_notify_log(ten_env_t *ten_env, void *user_data) {
   TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
              "Should not happen.");
 
-  ten_env_notify_log_info_t *info = user_data;
-  TEN_ASSERT(info, "Should not happen.");
+  ten_env_notify_log_ctx_t *ctx = user_data;
+  TEN_ASSERT(ctx, "Should not happen.");
 
-  ten_env_log(ten_env, info->level, info->func_name, info->file_name,
-              info->line_no, info->msg);
+  ten_env_log(ten_env, ctx->level, ten_string_get_raw_str(&ctx->func_name),
+              ten_string_get_raw_str(&ctx->file_name), ctx->line_no,
+              ten_string_get_raw_str(&ctx->msg));
 
-  ten_event_set(info->completed);
+  ten_env_notify_log_ctx_destroy(ctx);
 }
 
 PyObject *ten_py_ten_env_log(PyObject *self, PyObject *args) {
@@ -85,9 +101,6 @@ PyObject *ten_py_ten_env_log(PyObject *self, PyObject *args) {
   ten_error_t err;
   ten_error_init(&err);
 
-  ten_env_notify_log_info_t *info =
-      ten_env_notify_log_info_create(level, func_name, file_name, line_no, msg);
-
   if (py_ten_env->c_ten_env->attach_to == TEN_ENV_ATTACH_TO_ADDON) {
     // TODO(Wei): This function is currently specifically designed for the addon
     // because the addon currently does not have a main thread, so it's unable
@@ -95,23 +108,24 @@ PyObject *ten_py_ten_env_log(PyObject *self, PyObject *args) {
     // in the future, these hacks made specifically for the addon can be
     // completely removed, and comprehensive thread safety checking can be
     // implemented.
-    ten_env_log_without_check_thread(py_ten_env->c_ten_env, info->level,
-                                     info->func_name, info->file_name,
-                                     info->line_no, info->msg);
+    ten_env_log_without_check_thread(py_ten_env->c_ten_env, level, func_name,
+                                     file_name, line_no, msg);
   } else {
-    if (!ten_env_proxy_notify(py_ten_env->c_ten_env_proxy,
-                              ten_env_proxy_notify_log, info, false, &err)) {
-      goto done;
+    if (!py_ten_env->c_ten_env_proxy) {
+      return ten_py_raise_py_value_error_exception(
+          "ten_env.log() failed because ten_env_proxy is invalid.");
     }
 
-    PyThreadState *saved_py_thread_state = PyEval_SaveThread();
-    ten_event_wait(info->completed, -1);
-    PyEval_RestoreThread(saved_py_thread_state);
+    ten_env_notify_log_ctx_t *ctx = ten_env_notify_log_ctx_create(
+        level, func_name, file_name, line_no, msg);
+
+    if (!ten_env_proxy_notify(py_ten_env->c_ten_env_proxy,
+                              ten_env_proxy_notify_log, ctx, false, &err)) {
+      ten_env_notify_log_ctx_destroy(ctx);
+    }
   }
 
-done:
   ten_error_deinit(&err);
-  ten_env_notify_log_info_destroy(info);
 
   Py_RETURN_NONE;
 }

@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -29,14 +29,14 @@ const EdgeContextMenu: React.FC<EdgeContextMenuProps> = ({
 
   const items: ContextMenuItem[] = [
     {
-      label: t("Edit"),
+      label: t("action.edit"),
       icon: <FaEdit />,
       onClick: () => {
         onClose();
       },
     },
     {
-      label: t("Delete"),
+      label: t("action.delete"),
       icon: <FaTrash />,
       onClick: () => {
         onClose();

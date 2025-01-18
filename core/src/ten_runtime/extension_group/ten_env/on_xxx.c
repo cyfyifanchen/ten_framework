@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -79,10 +79,11 @@ void ten_extension_group_on_init_done(ten_env_t *self) {
                  ten_extension_thread_check_integrity(extension_thread, true),
              "Should not happen.");
 
-  ten_runloop_post_task_tail(
+  int rc = ten_runloop_post_task_tail(
       ten_extension_group_get_attached_runloop(extension_group),
       ten_extension_thread_on_extension_group_on_init_done, extension_thread,
       NULL);
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 void ten_extension_group_on_deinit_done(ten_env_t *self) {
@@ -122,10 +123,11 @@ void ten_extension_group_on_deinit_done(ten_env_t *self) {
 
   // All extensions belong to this extension thread (group) are deleted, notify
   // this to the extension thread.
-  ten_runloop_post_task_tail(
+  int rc = ten_runloop_post_task_tail(
       ten_extension_group_get_attached_runloop(extension_group),
       ten_extension_thread_on_extension_group_on_deinit_done, extension_thread,
       NULL);
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 void ten_extension_group_on_create_extensions_done(ten_extension_group_t *self,
@@ -141,6 +143,23 @@ void ten_extension_group_on_create_extensions_done(ten_extension_group_t *self,
   TEN_ASSERT(extension_thread &&
                  ten_extension_thread_check_integrity(extension_thread, true),
              "Should not happen.");
+
+  // Remove the extensions that were not successfully created from the list of
+  // created extensions to determine the actual extensions for this extension
+  // group/thread. Later, when this extension group/thread needs to shut down,
+  // only these actual extensions need to be handled, ensuring correctness.
+  ten_list_iterator_t iter = ten_list_begin(extensions);
+  while (!ten_list_iterator_is_end(iter)) {
+    ten_extension_t *extension = (ten_extension_t *)ten_ptr_listnode_get(
+        ten_list_iterator_to_listnode(iter));
+
+    ten_listnode_t *current_node = iter.node;
+    iter = ten_list_iterator_next(iter);
+
+    if (extension == TEN_EXTENSION_UNSUCCESSFULLY_CREATED) {
+      ten_list_remove_node(extensions, current_node);
+    }
+  }
 
   ten_list_swap(&extension_thread->extensions, extensions);
 
@@ -170,9 +189,10 @@ void ten_extension_group_on_destroy_extensions_done(
                  ten_extension_thread_check_integrity(extension_thread, true),
              "Should not happen.");
 
-  ten_runloop_post_task_tail(ten_extension_group_get_attached_runloop(self),
-                             ten_extension_thread_on_all_extensions_deleted,
-                             extension_thread, NULL);
+  int rc = ten_runloop_post_task_tail(
+      ten_extension_group_get_attached_runloop(self),
+      ten_extension_thread_on_all_extensions_deleted, extension_thread, NULL);
+  TEN_ASSERT(!rc, "Should not happen.");
 }
 
 void ten_extension_group_on_addon_create_extension_done(

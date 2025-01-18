@@ -1,5 +1,5 @@
 #
-# Copyright © 2024 Agora
+# Copyright © 2025 Agora
 # This file is part of TEN Framework, an open source project.
 # Licensed under the Apache License, Version 2.0, with certain conditions.
 # Refer to the "LICENSE" file in the root directory for more information.
@@ -39,6 +39,23 @@ def copy_tree(src_path: str, dst_path: str, rm_dst=False) -> None:
 
     if not os.path.isdir(src_path):
         raise Exception(src_path + " is not a directory.")
+
+    # Check if dst_path exists and is a directory.
+    if not os.path.exists(dst_path):
+        try:
+            os.makedirs(dst_path)
+        except Exception as exc:
+            raise Exception(
+                inspect.cleandoc(
+                    f"""Failed to create destination directory:
+                    {dst_path}
+                    Exception: {exc}"""
+                )
+            )
+    elif not os.path.isdir(dst_path):
+        raise Exception(
+            f"Destination path '{dst_path}' exists and is not a directory."
+        )
 
     try:
         if rm_dst:

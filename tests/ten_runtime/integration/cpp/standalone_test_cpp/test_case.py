@@ -15,7 +15,7 @@ def test_standalone_test_cpp():
 
     my_env = os.environ.copy()
 
-    extension_root_path = os.path.join(base_path, "default_extension_cpp")
+    extension_root_path = os.path.join(base_path, "ext")
 
     # Step 1:
     #
@@ -25,7 +25,9 @@ def test_standalone_test_cpp():
         os.path.join(root_dir, "ten_manager/bin/tman"),
         "--config-file",
         os.path.join(root_dir, "tests/local_registry/config.json"),
+        "--yes",
         "install",
+        "--standalone",
     ]
 
     tman_install_process = subprocess.Popen(
@@ -47,6 +49,15 @@ def test_standalone_test_cpp():
     # Step 2:
     #
     # Execute tgn gen to generate the build files.
+    #
+    # Regardless of whether it is a standalone or non-standalone build, the C++
+    # compilation in the TEN world is unified and always starts from the app
+    # folder. Therefore, we need to switch to the `.ten/app/` directory before
+    # proceeding with the C++ `tgn` compilation.
+    ten_app_path = os.path.join(extension_root_path, ".ten", "app")
+    if not os.path.isdir(ten_app_path):
+        assert False, f"The directory does not exist.: {ten_app_path}"
+
     tgn_gen_cmd = [
         "tgn",
         "gen",
@@ -67,7 +78,7 @@ def test_standalone_test_cpp():
         stdout=stdout,
         stderr=subprocess.STDOUT,
         env=my_env,
-        cwd=extension_root_path,
+        cwd=ten_app_path,
     )
     tgn_gen_rc = tgn_gen_process.wait()
     assert tgn_gen_rc == 0
@@ -91,7 +102,7 @@ def test_standalone_test_cpp():
         stdout=stdout,
         stderr=subprocess.STDOUT,
         env=my_env,
-        cwd=extension_root_path,
+        cwd=ten_app_path,
     )
     tgn_build_rc = tgn_build_process.wait()
     assert tgn_build_rc == 0
@@ -103,9 +114,7 @@ def test_standalone_test_cpp():
         os.path.join(
             extension_root_path,
             (
-                f"out/{build_config_args.target_os}/"
-                f"{build_config_args.target_cpu}/"
-                "tests/default_extension_cpp_test"
+                "bin/ext_test"
                 + (".exe" if build_config_args.target_os == "win" else "")
             ),
         ),
@@ -117,11 +126,7 @@ def test_standalone_test_cpp():
         my_env["PATH"] = (
             os.path.join(
                 extension_root_path,
-                (
-                    f"out/{build_config_args.target_os}/"
-                    f"{build_config_args.target_cpu}/"
-                    "ten_packages/system/ten_runtime/lib"
-                ),
+                (".ten/app/ten_packages/system/ten_runtime/lib"),
             )
             + ";"
             + my_env["PATH"]
@@ -132,6 +137,8 @@ def test_standalone_test_cpp():
         stdout=stdout,
         stderr=subprocess.STDOUT,
         env=my_env,
+        # Only C++ compilation needs to be performed within the app folder; for
+        # running tests, it switches back to the extension folder.
         cwd=extension_root_path,
     )
     tester_rc = tester_process.wait()

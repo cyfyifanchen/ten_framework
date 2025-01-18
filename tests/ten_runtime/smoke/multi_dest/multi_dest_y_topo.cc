@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -127,7 +127,7 @@ TEN_CPP_REGISTER_ADDON_AS_EXTENSION(multi_dest_y_graph__extension_4,
 
 }  // namespace
 
-TEST(ExtensionTest, MultiDestYGraph) {  // NOLINT
+TEST(MultiDestTest, MultiDestYGraph) {  // NOLINT
   // Start app.
   auto *app_thread =
       ten_thread_create("app thread", test_app_thread_main, nullptr);

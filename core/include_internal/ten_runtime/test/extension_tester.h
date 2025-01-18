@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -50,6 +50,7 @@ struct ten_extension_tester_t {
   ten_string_t test_app_property_json;
 
   ten_extension_tester_on_start_func_t on_start;
+  ten_extension_tester_on_stop_func_t on_stop;
   ten_extension_tester_on_cmd_func_t on_cmd;
   ten_extension_tester_on_data_func_t on_data;
   ten_extension_tester_on_audio_frame_func_t on_audio_frame;
@@ -63,6 +64,9 @@ struct ten_extension_tester_t {
 
 TEN_RUNTIME_API bool ten_extension_tester_check_integrity(
     ten_extension_tester_t *self, bool check_thread);
+
+TEN_RUNTIME_PRIVATE_API bool ten_extension_tester_thread_call_by_me(
+    ten_extension_tester_t *self);
 
 TEN_RUNTIME_PRIVATE_API void test_app_ten_env_send_cmd(ten_env_t *ten_env,
                                                        void *user_data);

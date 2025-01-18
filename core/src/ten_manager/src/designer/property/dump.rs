@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -12,15 +12,14 @@ use std::{
 use actix_web::{web, HttpResponse, Responder};
 use serde::Serialize;
 
-use ten_rust::pkg_info::pkg_type::PkgType;
+use ten_rust::pkg_info::{
+    constants::PROPERTY_JSON_FILENAME, pkg_type::PkgType,
+};
 
-use crate::{
-    constants::PROPERTY_JSON_FILENAME,
-    designer::{
-        get_all_pkgs::get_all_pkgs,
-        response::{ApiResponse, ErrorResponse, Status},
-        DesignerState,
-    },
+use crate::designer::{
+    get_all_pkgs::get_all_pkgs,
+    response::{ApiResponse, ErrorResponse, Status},
+    DesignerState,
 };
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -105,7 +104,7 @@ mod tests {
             graphs::update::{update_graph, GraphUpdateRequest},
             mock::tests::inject_all_pkgs_for_mock,
         },
-        utils::read_file_to_string,
+        fs::read_file_to_string,
     };
 
     #[actix_web::test]

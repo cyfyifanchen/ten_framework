@@ -4,7 +4,6 @@
 # See the LICENSE file for more information.
 #
 import asyncio
-import json
 from aiohttp import web, web_request, WSMsgType
 from ten import (
     Addon,
@@ -51,11 +50,14 @@ class HttpServerExtension(AsyncExtension):
                 if cmd is None:
                     return web.Response(status=400, text="Bad request")
 
-                cmd_result = await self.ten_env.send_cmd(cmd)
+                cmd_result, _ = await self.ten_env.send_cmd(cmd)
             else:
                 return web.Response(status=404, text="Not found")
 
-        if cmd_result.get_status_code() == StatusCode.OK:
+        if (
+            cmd_result is not None
+            and cmd_result.get_status_code() == StatusCode.OK
+        ):
             try:
                 detail = cmd_result.get_property_string("detail")
                 return web.Response(text=detail)
@@ -109,7 +111,7 @@ class HttpServerExtension(AsyncExtension):
         ten_env.log_debug("on_start")
 
         try:
-            self.server_port = ten_env.get_property_int("server_port")
+            self.server_port = await ten_env.get_property_int("server_port")
         except Exception as e:
             ten_env.log_error(
                 "Could not read 'server_port' from properties." + str(e)
@@ -134,5 +136,5 @@ class HttpServerExtension(AsyncExtension):
 @register_addon_as_extension("aio_http_server_python")
 class DefaultExtensionAddon(Addon):
     def on_create_instance(self, ten_env: TenEnv, name: str, context) -> None:
-        print("DefaultExtensionAddon on_create_instance")
+        print("on_create_instance")
         ten_env.on_create_instance_done(HttpServerExtension(name), context)

@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -69,8 +69,10 @@ inline bool ten_string_check_integrity(const ten_string_t *self) {
  */
 TEN_UTILS_API ten_string_t *ten_string_create(void);
 
-TEN_UTILS_API ten_string_t *ten_string_create_from_c_str(const char *str,
-                                                         size_t size);
+TEN_UTILS_API ten_string_t *ten_string_create_from_c_str_with_size(
+    const char *str, size_t size);
+
+TEN_UTILS_API ten_string_t *ten_string_create_from_c_str(const char *str);
 
 /**
  * @brief Create a string object from c string.
@@ -177,8 +179,12 @@ TEN_UTILS_API void ten_string_prepend_from_va_list(ten_string_t *self,
 TEN_UTILS_API void ten_string_set_formatted(ten_string_t *self, const char *fmt,
                                             ...);
 
+TEN_UTILS_API void ten_string_set_from_c_str_with_size(ten_string_t *self,
+                                                       const char *str,
+                                                       size_t size);
+
 TEN_UTILS_API void ten_string_set_from_c_str(ten_string_t *self,
-                                             const char *str, size_t size);
+                                             const char *str);
 
 /**
  * @brief Check if the string object is empty.

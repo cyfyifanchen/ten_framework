@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -11,9 +11,9 @@
 #include "include_internal/ten_runtime/engine/engine.h"
 #include "include_internal/ten_runtime/engine/internal/migration.h"
 #include "include_internal/ten_runtime/protocol/protocol.h"
-#include "ten_utils/macro/check.h"
 #include "ten_utils/io/runloop.h"
 #include "ten_utils/lib/ref.h"
+#include "ten_utils/macro/check.h"
 
 void ten_connection_migrate(ten_connection_t *self, ten_engine_t *engine,
                             ten_shared_ptr_t *cmd) {
@@ -116,8 +116,10 @@ static void ten_connection_on_migration_is_done_or_reset(
     // thread if the migration is completed. We must make sure the engine handle
     // all the messages in the original order.
     ten_runloop_t *loop = ten_connection_get_attached_runloop(self);
-    ten_runloop_post_task_tail(loop, ten_protocol_on_cleaned_task, protocol,
-                               (void *)is_migration_state_reset);
+    int rc =
+        ten_runloop_post_task_tail(loop, ten_protocol_on_cleaned_task, protocol,
+                                   (void *)is_migration_state_reset);
+    TEN_ASSERT(!rc, "Should not happen.");
   } else {
     TEN_ASSERT(0, "Should not happen.");
   }

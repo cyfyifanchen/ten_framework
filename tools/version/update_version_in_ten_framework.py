@@ -1,5 +1,5 @@
 #
-# Copyright © 2024 Agora
+# Copyright © 2025 Agora
 # This file is part of TEN Framework, an open source project.
 # Licensed under the Apache License, Version 2.0, with certain conditions.
 # Refer to the "LICENSE" file in the root directory for more information.
@@ -166,6 +166,16 @@ def collect_and_update_version_of_system_packages(
             "python",
             MANIFEST_JSON_FILE,
         ),
+        # ten_runtime_nodejs
+        os.path.join(
+            repo_base_dir,
+            "core",
+            "src",
+            "ten_runtime",
+            "binding",
+            "nodejs",
+            MANIFEST_JSON_FILE,
+        ),
     ]
 
     pkgInfos = []
@@ -198,17 +208,24 @@ def collect_and_update_version_of_core_packages(
         "packages",
         "core_protocols",
     )
+    core_addon_loaders_dir_path = os.path.join(
+        repo_base_dir,
+        "packages",
+        "core_addon_loaders",
+    )
 
     manifest_files = (
         __collect_manifest_files(core_apps_dir_path)
         + __collect_manifest_files(core_extensions_dir_path)
         + __collect_manifest_files(core_protocols_dir_path)
+        + __collect_manifest_files(core_addon_loaders_dir_path)
     )
 
     manifest_template_files = (
         __collect_manifest_tent_files(core_apps_dir_path)
         + __collect_manifest_tent_files(core_extensions_dir_path)
         + __collect_manifest_tent_files(core_protocols_dir_path)
+        + __collect_manifest_tent_files(core_addon_loaders_dir_path)
     )
 
     pkg_infos = []

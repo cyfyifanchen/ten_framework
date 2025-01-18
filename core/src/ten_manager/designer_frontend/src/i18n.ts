@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -17,7 +17,7 @@ i18n
   // Pass the i18n instance to react-i18next.
   .use(initReactI18next)
   .init({
-    fallbackLng: "en", // Default language.
+    fallbackLng: "en-US", // Default language.
     debug: true, // Enable debug mode, can be turned off in production.
 
     ns: ["common"], // Define namespace.

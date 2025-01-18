@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -47,6 +47,13 @@ class cmd_stop_graph_t : public cmd_t {
   cmd_stop_graph_t &operator=(const cmd_stop_graph_t &cmd) = delete;
   cmd_stop_graph_t &operator=(cmd_stop_graph_t &&cmd) = delete;
   // @}
+
+  std::string get_graph_id(error_t *err = nullptr) const {
+    return ten_cmd_stop_graph_get_graph_id(c_msg);
+  }
+  bool set_graph_id(const char *graph_id, error_t *err = nullptr) {
+    return ten_cmd_stop_graph_set_graph_id(c_msg, graph_id);
+  }
 };
 
 }  // namespace ten

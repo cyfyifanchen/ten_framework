@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -16,34 +16,34 @@
 #include "ten_utils/value/value.h"
 #include "ten_utils/value/value_get.h"
 
-typedef struct ten_env_notify_get_property_info_t {
+typedef struct ten_env_notify_get_property_ctx_t {
   ten_string_t path;
   ten_value_t *c_value;
   ten_event_t *completed;
-} ten_env_notify_get_property_info_t;
+} ten_env_notify_get_property_ctx_t;
 
-static ten_env_notify_get_property_info_t *
-ten_env_notify_get_property_info_create(const void *path) {
-  ten_env_notify_get_property_info_t *info =
-      TEN_MALLOC(sizeof(ten_env_notify_get_property_info_t));
-  TEN_ASSERT(info, "Failed to allocate memory.");
+static ten_env_notify_get_property_ctx_t *
+ten_env_notify_get_property_ctx_create(const void *path) {
+  ten_env_notify_get_property_ctx_t *ctx =
+      TEN_MALLOC(sizeof(ten_env_notify_get_property_ctx_t));
+  TEN_ASSERT(ctx, "Failed to allocate memory.");
 
-  ten_string_init_formatted(&info->path, "%s", path);
-  info->c_value = NULL;
-  info->completed = ten_event_create(0, 1);
+  ten_string_init_formatted(&ctx->path, "%s", path);
+  ctx->c_value = NULL;
+  ctx->completed = ten_event_create(0, 1);
 
-  return info;
+  return ctx;
 }
 
-static void ten_env_notify_get_property_info_destroy(
-    ten_env_notify_get_property_info_t *info) {
-  TEN_ASSERT(info, "Invalid argument.");
+static void ten_env_notify_get_property_ctx_destroy(
+    ten_env_notify_get_property_ctx_t *ctx) {
+  TEN_ASSERT(ctx, "Invalid argument.");
 
-  ten_string_deinit(&info->path);
-  info->c_value = NULL;
-  ten_event_destroy(info->completed);
+  ten_string_deinit(&ctx->path);
+  ctx->c_value = NULL;
+  ten_event_destroy(ctx->completed);
 
-  TEN_FREE(info);
+  TEN_FREE(ctx);
 }
 
 static void ten_env_proxy_notify_get_property(ten_env_t *ten_env,
@@ -52,21 +52,21 @@ static void ten_env_proxy_notify_get_property(ten_env_t *ten_env,
   TEN_ASSERT(ten_env && ten_env_check_integrity(ten_env, true),
              "Should not happen.");
 
-  ten_env_notify_get_property_info_t *info = user_data;
-  TEN_ASSERT(info, "Should not happen.");
+  ten_env_notify_get_property_ctx_t *ctx = user_data;
+  TEN_ASSERT(ctx, "Should not happen.");
 
   ten_error_t err;
   ten_error_init(&err);
 
   ten_value_t *c_value =
-      ten_env_peek_property(ten_env, ten_string_get_raw_str(&info->path), &err);
+      ten_env_peek_property(ten_env, ten_string_get_raw_str(&ctx->path), &err);
 
   // Because this value will be passed out of the TEN world and back into the
   // Python world, and these two worlds are in different threads, copy semantics
   // are used to avoid thread safety issues.
-  info->c_value = c_value ? ten_value_clone(c_value) : NULL;
+  ctx->c_value = c_value ? ten_value_clone(c_value) : NULL;
 
-  ten_event_set(info->completed);
+  ten_event_set(ctx->completed);
 
   ten_error_deinit(&err);
 }
@@ -80,24 +80,24 @@ static ten_value_t *ten_py_ten_property_get_and_check_if_exists(
   ten_error_t err;
   ten_error_init(&err);
 
-  ten_env_notify_get_property_info_t *info =
-      ten_env_notify_get_property_info_create(path);
+  ten_env_notify_get_property_ctx_t *ctx =
+      ten_env_notify_get_property_ctx_create(path);
 
   if (!ten_env_proxy_notify(self->c_ten_env_proxy,
-                            ten_env_proxy_notify_get_property, info, false,
+                            ten_env_proxy_notify_get_property, ctx, false,
                             &err)) {
     goto done;
   }
 
   PyThreadState *saved_py_thread_state = PyEval_SaveThread();
-  ten_event_wait(info->completed, -1);
+  ten_event_wait(ctx->completed, -1);
   PyEval_RestoreThread(saved_py_thread_state);
 
-  c_value = info->c_value;
+  c_value = ctx->c_value;
 
 done:
   ten_error_deinit(&err);
-  ten_env_notify_get_property_info_destroy(info);
+  ten_env_notify_get_property_ctx_destroy(ctx);
 
   return c_value;
 }
@@ -116,6 +116,12 @@ PyObject *ten_py_ten_env_get_property_to_json(PyObject *self, PyObject *args) {
   if (!PyArg_ParseTuple(args, "s", &path)) {
     return ten_py_raise_py_value_error_exception(
         "Failed to parse argument when ten_env.get_property_to_json.");
+  }
+
+  if (!py_ten_env->c_ten_env_proxy) {
+    return ten_py_raise_py_value_error_exception(
+        "ten_env.get_property_to_json() failed because ten_env_proxy is "
+        "invalid.");
   }
 
   ten_value_t *value =
@@ -163,6 +169,11 @@ PyObject *ten_py_ten_env_get_property_int(PyObject *self, PyObject *args) {
         "Failed to parse argument when ten_env.get_property_int.");
   }
 
+  if (!py_ten_env->c_ten_env_proxy) {
+    return ten_py_raise_py_value_error_exception(
+        "ten_env.get_property_int() failed because ten_env_proxy is invalid.");
+  }
+
   ten_value_t *value =
       ten_py_ten_property_get_and_check_if_exists(py_ten_env, path);
   if (!value) {
@@ -202,6 +213,12 @@ PyObject *ten_py_ten_env_get_property_string(PyObject *self, PyObject *args) {
         "Failed to parse argument when ten_env.get_property_string.");
   }
 
+  if (!py_ten_env->c_ten_env_proxy) {
+    return ten_py_raise_py_value_error_exception(
+        "ten_env.get_property_string() failed because ten_env_proxy is "
+        "invalid.");
+  }
+
   ten_value_t *value =
       ten_py_ten_property_get_and_check_if_exists(py_ten_env, path);
   if (!value) {
@@ -238,6 +255,11 @@ PyObject *ten_py_ten_env_get_property_bool(PyObject *self, PyObject *args) {
   if (!PyArg_ParseTuple(args, "s", &path)) {
     return ten_py_raise_py_value_error_exception(
         "Failed to parse argument when ten_env.get_property_bool.");
+  }
+
+  if (!py_ten_env->c_ten_env_proxy) {
+    return ten_py_raise_py_value_error_exception(
+        "ten_env.get_property_bool() failed because ten_env_proxy is invalid.");
   }
 
   ten_value_t *value =
@@ -279,6 +301,12 @@ PyObject *ten_py_ten_env_get_property_float(PyObject *self, PyObject *args) {
         "Failed to parse argument when ten_env.get_property_float.");
   }
 
+  if (!py_ten_env->c_ten_env_proxy) {
+    return ten_py_raise_py_value_error_exception(
+        "ten_env.get_property_float() failed because ten_env_proxy is "
+        "invalid.");
+  }
+
   ten_value_t *value =
       ten_py_ten_property_get_and_check_if_exists(py_ten_env, path);
   if (!value) {
@@ -316,6 +344,11 @@ PyObject *ten_py_ten_env_is_property_exist(PyObject *self, PyObject *args) {
   if (!PyArg_ParseTuple(args, "s", &path)) {
     return ten_py_raise_py_value_error_exception(
         "Failed to parse argument when ten_env.is_property_exist.");
+  }
+
+  if (!py_ten_env->c_ten_env_proxy) {
+    return ten_py_raise_py_value_error_exception(
+        "ten_env.is_property_exist() failed because ten_env_proxy is invalid.");
   }
 
   ten_value_t *value =

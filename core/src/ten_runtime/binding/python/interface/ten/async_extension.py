@@ -1,5 +1,5 @@
 #
-# Copyright © 2024 Agora
+# Copyright © 2025 Agora
 # This file is part of TEN Framework, an open source project.
 # Licensed under the Apache License, Version 2.0, with certain conditions.
 # Refer to the "LICENSE" file in the root directory for more information.
@@ -27,9 +27,7 @@ class AsyncExtension(_Extension):
         self._ten_stop_event = asyncio.Event()
 
     def __del__(self) -> None:
-        self._ten_stop_event.set()
-        if hasattr(self, "_ten_thread"):
-            self._ten_thread.join()
+        pass
 
     async def _thread_routine(self, ten_env: TenEnv):
         self._ten_loop = asyncio.get_running_loop()

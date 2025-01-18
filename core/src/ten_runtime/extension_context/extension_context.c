@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -10,6 +10,7 @@
 #include <stdlib.h>
 
 #include "include_internal/ten_runtime/addon/addon.h"
+#include "include_internal/ten_runtime/addon/addon_host.h"
 #include "include_internal/ten_runtime/addon/extension_group/extension_group.h"
 #include "include_internal/ten_runtime/app/app.h"
 #include "include_internal/ten_runtime/common/constant_str.h"
@@ -80,7 +81,7 @@ ten_extension_context_t *ten_extension_context_create(ten_engine_t *engine) {
   ten_list_init(&self->extension_groups);
   ten_list_init(&self->extension_threads);
 
-  self->extension_threads_cnt_of_initted = 0;
+  self->extension_threads_cnt_of_ready = 0;
   self->extension_threads_cnt_of_closed = 0;
 
   self->extension_groups_cnt_of_being_destroyed = 0;

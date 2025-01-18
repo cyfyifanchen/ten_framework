@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -199,9 +199,10 @@ const char *ten_msg_get_first_dest_uri(ten_shared_ptr_t *self) {
   return ten_raw_msg_get_first_dest_uri(ten_msg_get_raw_msg(self));
 }
 
-void ten_raw_msg_set_src(ten_msg_t *self, const char *uri, const char *graph_id,
-                         const char *extension_group_name,
-                         const char *extension_name) {
+static void ten_raw_msg_set_src(ten_msg_t *self, const char *uri,
+                                const char *graph_id,
+                                const char *extension_group_name,
+                                const char *extension_name) {
   TEN_ASSERT(self && ten_raw_msg_check_integrity(self), "Should not happen.");
   ten_loc_set(&self->src_loc, uri, graph_id, extension_group_name,
               extension_name);
@@ -276,7 +277,7 @@ void ten_msg_set_src_to_extension_group(
              "Should not happen.");
 
   ten_msg_set_src(self, ten_app_get_uri(engine->app),
-                  ten_engine_get_id(engine, true),
+                  ten_engine_get_id(engine, false),
                   ten_extension_group_get_name(extension_group, true), NULL);
 }
 
@@ -925,7 +926,7 @@ void ten_msg_correct_dest(ten_shared_ptr_t *msg, ten_engine_t *engine) {
       // 'correct' the real destination location from 'localhost' to the real
       // URI of the app.
 
-      ten_string_set_from_c_str(&dest_loc->app_uri, app_uri, strlen(app_uri));
+      ten_string_set_from_c_str(&dest_loc->app_uri, app_uri);
       is_local_app = true;
     }
 

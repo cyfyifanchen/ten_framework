@@ -1,5 +1,5 @@
 #
-# Copyright © 2024 Agora
+# Copyright © 2025 Agora
 # This file is part of TEN Framework, an open source project.
 # Licensed under the Apache License, Version 2.0, with certain conditions.
 # Refer to the "LICENSE" file in the root directory for more information.
@@ -20,6 +20,9 @@ group("go") {
       "prepare_to_stop_go",
       "return_result_go",
       "return_value_go",
+      "send_audio_frame_go",
+      "send_data_go",
+      "send_video_frame_go",
       "start_app_sync_go",
       "three_extension_cmd_go",
       "transfer_pointer_go",

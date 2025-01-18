@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -15,16 +15,17 @@ use clap::{Arg, ArgMatches, Command};
 use console::Emoji;
 use indicatif::HumanDuration;
 use serde_json::from_reader;
+use ten_rust::pkg_info::constants::TEN_PACKAGES_DIR;
 
 use crate::{
     config::TmanConfig,
     constants::{
         DOT_TEN_DIR, INSTALLED_PATHS_JSON_FILENAME, INSTALL_PATHS_APP_PREFIX,
-        PACKAGE_INFO_DIR_IN_DOT_TEN_DIR, TEN_PACKAGES_DIR,
+        PACKAGE_INFO_DIR_IN_DOT_TEN_DIR,
     },
+    fs::check_is_app_folder,
     install::installed_paths::InstalledPaths,
     log::tman_verbose_println,
-    utils::check_is_app_folder,
 };
 
 #[derive(Debug)]
@@ -49,7 +50,7 @@ pub fn create_sub_cmd(args_cfg: &crate::cmd_line::ArgsCfg) -> Command {
         )
 }
 
-pub fn parse_sub_cmd(sub_cmd_args: &ArgMatches) -> UninstallCommand {
+pub fn parse_sub_cmd(sub_cmd_args: &ArgMatches) -> Result<UninstallCommand> {
     let cmd = UninstallCommand {
         package_type: sub_cmd_args
             .get_one::<String>("PACKAGE_TYPE")
@@ -61,7 +62,7 @@ pub fn parse_sub_cmd(sub_cmd_args: &ArgMatches) -> UninstallCommand {
             .clone(),
     };
 
-    cmd
+    Ok(cmd)
 }
 
 async fn remove_installed_paths(
@@ -148,7 +149,7 @@ pub async fn execute_cmd(
 
     let started = Instant::now();
 
-    let cwd = crate::utils::get_cwd()?;
+    let cwd = crate::fs::get_cwd()?;
     check_is_app_folder(&cwd)?;
 
     remove_installed_paths(&cwd, &command_data).await?;

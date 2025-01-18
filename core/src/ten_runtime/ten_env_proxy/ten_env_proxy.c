@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -14,7 +14,6 @@
 #include "include_internal/ten_runtime/ten_env_proxy/ten_env_proxy.h"
 #include "ten_runtime/common/errno.h"
 #include "ten_runtime/extension/extension.h"
-#include "ten_runtime/extension_group/extension_group.h"
 #include "ten_runtime/ten_env/ten_env.h"
 #include "ten_runtime/ten_env_proxy/ten_env_proxy.h"
 #include "ten_utils/io/runloop.h"
@@ -240,8 +239,10 @@ bool ten_env_proxy_release(ten_env_proxy_t *self, ten_error_t *err) {
 
     ten_mutex_unlock(self->lock);
 
-    ten_runloop_post_task_tail(ten_env_get_attached_runloop(ten_env),
-                               ten_notify_proxy_is_deleted, ten_env, self);
+    int rc =
+        ten_runloop_post_task_tail(ten_env_get_attached_runloop(ten_env),
+                                   ten_notify_proxy_is_deleted, ten_env, self);
+    TEN_ASSERT(!rc, "Should not happen.");
 
     return true;
   }

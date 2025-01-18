@@ -1,5 +1,5 @@
 #
-# Copyright © 2024 Agora
+# Copyright © 2025 Agora
 # This file is part of TEN Framework, an open source project.
 # Licensed under the Apache License, Version 2.0, with certain conditions.
 # Refer to the "LICENSE" file in the root directory for more information.
@@ -9,7 +9,11 @@ from .extension import Extension
 from .async_extension import AsyncExtension
 from .async_ten_env import AsyncTenEnv
 from .addon import Addon
-from .addon_manager import register_addon_as_extension, _AddonManager
+from .addon_manager import (
+    register_addon_as_extension,
+    unregister_all_addons_and_cleanup,
+    _AddonManager,
+)
 from .ten_env import TenEnv
 from .cmd import Cmd
 from .cmd_result import CmdResult, StatusCode
@@ -17,8 +21,9 @@ from .video_frame import VideoFrame, PixelFmt
 from .audio_frame import AudioFrame, AudioFrameDataFmt
 from .data import Data
 from .log_level import LogLevel
-from .test import ExtensionTester, TenEnvTester
 from .error import TenError
+from .test import ExtensionTester, TenEnvTester
+from .async_test import AsyncExtensionTester, AsyncTenEnvTester
 
 # Specify what should be imported when a user imports * from the
 # ten_runtime_python package.
@@ -26,6 +31,7 @@ __all__ = [
     "Addon",
     "_AddonManager",
     "register_addon_as_extension",
+    "unregister_all_addons_and_cleanup",
     "App",
     "Extension",
     "AsyncExtension",
@@ -43,4 +49,6 @@ __all__ = [
     "ExtensionTester",
     "TenEnvTester",
     "TenError",
+    "AsyncExtensionTester",
+    "AsyncTenEnvTester",
 ]

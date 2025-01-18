@@ -1,11 +1,12 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
 //
 #include "gtest/gtest.h"
 #include "include_internal/ten_runtime/binding/cpp/ten.h"
+#include "ten_runtime/binding/cpp/detail/msg/cmd/stop_graph.h"
 #include "tests/common/client/cpp/msgpack_tcp.h"
 #include "tests/ten_runtime/smoke/util/binding/cpp/check.h"
 
@@ -56,21 +57,34 @@ class test_predefined_graph : public ten::extension_t {
               "normal_extension");
           ten_env.send_cmd(
               std::move(hello_world_cmd),
-              [this](ten::ten_env_t &ten_env,
-                     std::unique_ptr<ten::cmd_result_t> cmd,
-                     ten::error_t *err) {
-                received_hello_world_resp = true;
+              [this, graph_id](ten::ten_env_t &ten_env,
+                               std::unique_ptr<ten::cmd_result_t> cmd,
+                               ten::error_t *err) {
+                // Shut down the graph; otherwise, the app won't be able to
+                // close because there is still a running engine/graph.
+                auto stop_graph_cmd = ten::cmd_stop_graph_t::create();
+                stop_graph_cmd->set_dest("localhost", nullptr, nullptr,
+                                         nullptr);
+                stop_graph_cmd->set_graph_id(graph_id.c_str());
 
-                if (test_cmd != nullptr) {
-                  nlohmann::json detail = {{"id", 1}, {"name", "a"}};
+                ten_env.send_cmd(
+                    std::move(stop_graph_cmd),
+                    [this](ten::ten_env_t &ten_env,
+                           std::unique_ptr<ten::cmd_result_t> cmd,
+                           ten::error_t *err) {
+                      received_hello_world_resp = true;
 
-                  auto cmd_result =
-                      ten::cmd_result_t::create(TEN_STATUS_CODE_OK);
-                  cmd_result->set_property_from_json("detail",
-                                                     detail.dump().c_str());
-                  ten_env.return_result(std::move(cmd_result),
-                                        std::move(test_cmd));
-                }
+                      if (test_cmd != nullptr) {
+                        nlohmann::json detail = {{"id", 1}, {"name", "a"}};
+
+                        auto cmd_result =
+                            ten::cmd_result_t::create(TEN_STATUS_CODE_OK);
+                        cmd_result->set_property_from_json(
+                            "detail", detail.dump().c_str());
+                        ten_env.return_result(std::move(cmd_result),
+                                              std::move(test_cmd));
+                      }
+                    });
               });
         });
 
@@ -158,7 +172,7 @@ TEN_CPP_REGISTER_ADDON_AS_EXTENSION(
 
 }  // namespace
 
-TEST(ExtensionTest, StartGraphAndCommunication) {  // NOLINT
+TEST(StartGraphTest, StartGraphAndCommunication) {  // NOLINT
   auto *app_thread = ten_thread_create("app thread", app_thread_main, nullptr);
 
   // Create a client and connect to the app.

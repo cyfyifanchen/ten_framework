@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -11,7 +11,9 @@
 #include "ten_utils/container/list.h"
 #include "ten_utils/container/list_node_str.h"
 #include "ten_utils/lib/string.h"
+#include "ten_utils/log/log.h"
 #include "ten_utils/macro/check.h"
+#include "ten_utils/macro/memory.h"
 
 int ten_py_is_initialized(void) { return Py_IsInitialized(); }
 
@@ -96,6 +98,7 @@ void ten_py_add_paths_to_sys(ten_list_t *paths) {
     const char *str = ten_string_get_raw_str(&str_node->str);
     PyObject *path = PyUnicode_FromString(str);
     PyList_Append(sys_path, path);
+
     Py_DECREF(path);
   }
 
@@ -117,14 +120,22 @@ void ten_py_run_file(const char *file_path) {
   PyRun_SimpleFile(fp, file_path);
 }
 
-void ten_py_import_module(const char *module_name) {
+bool ten_py_import_module(const char *module_name) {
   PyObject *module = PyUnicode_DecodeFSDefault(module_name);
   PyObject *imported_module = PyImport_Import(module);
   Py_DECREF(module);
 
   if (imported_module == NULL) {
+    TEN_LOGI(
+        "Failed to load %s. Might because of an incorrect PYTHONPATH or it is "
+        "not a valid Python module.",
+        module_name);
     PyErr_Print();
+
+    return false;
   }
+
+  return true;
 }
 
 void *ten_py_eval_save_thread(void) {
@@ -137,7 +148,7 @@ void ten_py_eval_restore_thread(void *state) {
   PyEval_RestoreThread(state);
 }
 
-PyGILState_STATE ten_py_gil_state_ensure(void) {
+PyGILState_STATE ten_py_gil_state_ensure_internal(void) {
   // The logic inside PyGILState_Ensure is as follows:
   //
   // 1) Retrieves the PyThreadState for the current thread using
@@ -151,7 +162,7 @@ PyGILState_STATE ten_py_gil_state_ensure(void) {
   return PyGILState_Ensure();
 }
 
-void ten_py_gil_state_release(PyGILState_STATE state) {
+void ten_py_gil_state_release_internal(PyGILState_STATE state) {
   // Acquire the 'PyThreadState' of the current thread and determine whether the
   // thread holding the GIL is the current thread. If not, it will cause a fatal
   // error.
@@ -161,4 +172,25 @@ void ten_py_gil_state_release(PyGILState_STATE state) {
 bool ten_py_is_holding_gil(void) {
   // Judge whether the current thread holds the GIL, 1: true, 0: false.
   return PyGILState_Check() == 1;
+}
+
+typedef struct ten_py_gil_state_t {
+  PyGILState_STATE state;
+} ten_py_gil_state_t;
+
+void *ten_py_gil_state_ensure(void) {
+  ten_py_gil_state_t *ten_py_gil_state = TEN_MALLOC(sizeof(ten_py_gil_state_t));
+  TEN_ASSERT(ten_py_gil_state, "Failed to allocate memory.");
+
+  ten_py_gil_state->state = ten_py_gil_state_ensure_internal();
+  return (void *)ten_py_gil_state;
+}
+
+void ten_py_gil_state_release(void *state) {
+  TEN_ASSERT(state, "Invalid argument.");
+
+  ten_py_gil_state_t *ten_py_gil_state = state;
+  ten_py_gil_state_release_internal(ten_py_gil_state->state);
+
+  TEN_FREE(ten_py_gil_state);
 }

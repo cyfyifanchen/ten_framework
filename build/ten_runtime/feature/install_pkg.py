@@ -1,5 +1,5 @@
 #
-# Copyright © 2024 Agora
+# Copyright © 2025 Agora
 # This file is part of TEN Framework, an open source project.
 # Licensed under the Apache License, Version 2.0, with certain conditions.
 # Refer to the "LICENSE" file in the root directory for more information.
@@ -159,12 +159,11 @@ if __name__ == "__main__":
                 args.src_pkg += f"@{versions[0]}"
 
         cmd += [
-            "install",
+            "create",
             args.pkg_type,
+            generated_app_name,
+            "--template",
             args.src_pkg,
-            "--template-mode",
-            "--template-data",
-            f"package_name={generated_app_name}",
         ]
 
         if args.build_type is not None:

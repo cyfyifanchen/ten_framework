@@ -17,7 +17,7 @@ def test_check_start_graph():
     my_env = os.environ.copy()
 
     app_root_path = os.path.join(base_path, "check_start_graph_app")
-    source_pkg_name = "check_start_graph_source"
+    app_dir_name = "check_start_graph_app"
     app_language = "cpp"
 
     build_config_args = build_config.parse_build_config(
@@ -25,16 +25,13 @@ def test_check_start_graph():
     )
 
     if build_config_args.ten_enable_integration_tests_prebuilt is False:
-        print(
-            f"Assembling and building integration test case '{source_pkg_name}'"
-        )
+        print(f"Assembling and building integration test case '{app_dir_name}'")
 
         rc = build_pkg.prepare_and_build_app(
             build_config_args,
             root_dir,
             base_path,
-            app_root_path,
-            source_pkg_name,
+            app_dir_name,
             app_language,
         )
         if rc != 0:
@@ -44,6 +41,7 @@ def test_check_start_graph():
         os.path.join(root_dir, "ten_manager/bin/tman"),
         "--config-file",
         os.path.join(root_dir, "tests/local_registry/config.json"),
+        "--yes",
         "install",
     ]
 
@@ -69,12 +67,12 @@ def test_check_start_graph():
             + my_env["PATH"]
         )
         server_cmd = os.path.join(
-            app_root_path, "bin/check_start_graph_source.exe"
+            app_root_path, "bin/check_start_graph_app.exe"
         )
     elif sys.platform == "darwin":
-        server_cmd = os.path.join(app_root_path, "bin/check_start_graph_source")
+        server_cmd = os.path.join(app_root_path, "bin/check_start_graph_app")
     else:
-        server_cmd = os.path.join(app_root_path, "bin/check_start_graph_source")
+        server_cmd = os.path.join(app_root_path, "bin/check_start_graph_app")
 
         if (
             build_config_args.enable_sanitizer
@@ -85,6 +83,7 @@ def test_check_start_graph():
                 "ten_packages/system/ten_runtime/lib/libasan.so",
             )
             if os.path.exists(libasan_path):
+                print("Using AddressSanitizer library.")
                 my_env["LD_PRELOAD"] = libasan_path
 
     if not os.path.isfile(server_cmd):
@@ -107,8 +106,8 @@ def test_check_start_graph():
     assert server_rc == 0
 
     if build_config_args.ten_enable_integration_tests_prebuilt is False:
-        source_root_path = os.path.join(base_path, source_pkg_name)
+        source_root_path = os.path.join(base_path, app_dir_name)
 
         # Testing complete. If builds are only created during the testing phase,
-        # we  can clear the build results to save disk space.
+        # we can clear the build results to save disk space.
         build_pkg.cleanup(source_root_path, app_root_path)

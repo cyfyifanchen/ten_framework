@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -36,6 +36,8 @@ class test_extension_1 : public ten::extension_t {
                      [=](ten::ten_env_t &ten_env,
                          std::unique_ptr<ten::cmd_result_t> /*cmd_result*/,
                          ten::error_t *err) {
+                       // Only after receiving the result, we can call
+                       // `on_stop_done`.
                        ten_env.on_stop_done();
                        return true;
                      });
@@ -63,8 +65,26 @@ class test_extension_2 : public ten::extension_t {
       auto cmd_result = ten::cmd_result_t::create(TEN_STATUS_CODE_OK);
       cmd_result->set_property("detail", "");
       ten_env.return_result(std::move(cmd_result), std::move(cmd));
+
+      received_extension_1_stop_cmd = true;
+
+      if (have_called_on_stop) {
+        ten_env.on_stop_done();
+      }
     }
   }
+
+  void on_stop(ten::ten_env_t &ten_env) override {
+    have_called_on_stop = true;
+
+    if (received_extension_1_stop_cmd) {
+      ten_env.on_stop_done();
+    }
+  }
+
+ private:
+  bool received_extension_1_stop_cmd = false;
+  bool have_called_on_stop = false;
 };
 
 class test_app : public ten::app_t {
@@ -126,7 +146,7 @@ TEST(ExtensionTest, PrepareToStopDifferentThread) {  // NOLINT
                "name": "test_extension_2",
                "addon": "prepare_to_stop_different_thread__test_extension_2",
                "app": "msgpack://127.0.0.1:8001/",
-               "extension_group": "basic_extension_group"
+               "extension_group": "basic_extension_group_1"
              }],
              "connections": [{
                "app": "msgpack://127.0.0.1:8001/",

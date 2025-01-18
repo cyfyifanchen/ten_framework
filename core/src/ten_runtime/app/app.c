@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -150,10 +150,6 @@ void ten_app_destroy(ten_app_t *self) {
 
   ten_env_destroy(self->ten_env);
   ten_mutex_destroy(self->state_lock);
-
-  if (self->endpoint_protocol) {
-    ten_ref_dec_ref(&self->endpoint_protocol->ref);
-  }
 
   ten_value_deinit(&self->manifest);
   ten_value_deinit(&self->property);

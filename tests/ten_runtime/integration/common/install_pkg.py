@@ -1,5 +1,5 @@
 #
-# Copyright © 2024 Agora
+# Copyright © 2025 Agora
 # This file is part of TEN Framework, an open source project.
 # Licensed under the Apache License, Version 2.0, with certain conditions.
 # Refer to the "LICENSE" file in the root directory for more information.
@@ -16,7 +16,6 @@ class ArgumentInfo(argparse.Namespace):
         self.pkg_type: str
         self.pkg_src_root_dir: str
         self.src_pkg: str
-        self.build_type: str
         self.config_file: str
         self.log_level: int
         self.local_registry_path: str
@@ -68,16 +67,12 @@ def main(args: ArgumentInfo) -> int:
                 args.src_pkg += f"@{versions[0]}"
 
         cmd += [
-            "install",
+            "create",
             args.pkg_type,
+            generated_app_name,
+            "--template",
             args.src_pkg,
-            "--template-mode",
-            "--template-data",
-            f"package_name={generated_app_name}",
         ]
-
-        if args.build_type is not None:
-            list.append(cmd, "--build-type=" + args.build_type)
 
         if args.log_level > 0:
             print(f"> {cmd}")
@@ -123,12 +118,6 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="The name of TEN package",
-    )
-    parser.add_argument(
-        "--build-type",
-        type=str,
-        required=False,
-        help="'debug', 'release'",
     )
     parser.add_argument(
         "--config-file",

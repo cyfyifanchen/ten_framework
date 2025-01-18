@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -104,7 +104,64 @@ mod tests {
           "type": "app",
           "name": "default_app_cpp",
           "version": "0.1.0",
-                  "dependencies": [],
+          "dependencies": [],
+          "api": {}
+        }
+        "#;
+        let result = ten_validate_manifest_json_string(manifest);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_dependencies_normal() {
+        let manifest = r#"
+        {
+          "type": "app",
+          "name": "default_app_cpp",
+          "version": "0.1.0",
+          "dependencies": [{
+            "type": "system",
+            "name": "ten_runtime",
+            "version": "0.6.0"
+          }],
+          "api": {}
+        }
+        "#;
+        let result = ten_validate_manifest_json_string(manifest);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_dependencies_with_path() {
+        let manifest = r#"
+        {
+          "type": "app",
+          "name": "default_app_cpp",
+          "version": "0.1.0",
+          "dependencies": [{
+            "path": "path/to/dependency"
+          }],
+          "api": {}
+        }
+        "#;
+        let result = ten_validate_manifest_json_string(manifest);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_dependencies_normal_and_with_path() {
+        let manifest = r#"
+        {
+          "type": "app",
+          "name": "default_app_cpp",
+          "version": "0.1.0",
+          "dependencies": [{
+            "type": "system",
+            "name": "ten_runtime",
+            "version": "0.6.0"
+          },{
+            "path": "path/to/dependency"
+          }],
           "api": {}
         }
         "#;
@@ -119,7 +176,7 @@ mod tests {
           "type": "extension",
           "name": "default_extension_cpp",
           "version": "0.1.0",
-                  "dependencies": []
+          "dependencies": []
         }
         "#;
         let result = ten_validate_manifest_json_string(manifest);
@@ -133,7 +190,7 @@ mod tests {
           "type": "extension",
           "name": "default_extension_cpp",
           "version": "0.1.0",
-                  "dependencies": [],
+          "dependencies": [],
           "supports": []
         }
         "#;
@@ -148,7 +205,7 @@ mod tests {
           "type": "extension",
           "name": "default_extension_cpp",
           "version": "0.1.0",
-                  "dependencies": [],
+          "dependencies": [],
           "supports": [{"os": "linux", "arch": "x64"}]
         }
         "#;
@@ -163,18 +220,13 @@ mod tests {
           "type": "invalid",
           "name": "default_app_cpp",
           "version": "0.1.0",
-                  "dependencies": [],
+          "dependencies": [],
           "api": {}
         }
         "#;
 
         let result = ten_validate_manifest_json_string(manifest);
         assert!(result.is_err());
-
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains(
-            "is not one of [\"app\",\"extension\",\"extension_group\",\"system\",\"protocol\"]"
-        ));
     }
 
     #[test]
@@ -349,7 +401,7 @@ mod tests {
           "type": "app",
           "name": "default_app_cpp",
           "version": "0.1.0",
-                  "dependencies": [],
+          "dependencies": [],
           "api": {
             "cmd_in": [
               {
@@ -403,7 +455,7 @@ mod tests {
           "type": "app",
           "name": "default_app_cpp",
           "version": "0.1.0",
-                  "dependencies": [],
+          "dependencies": [],
           "api": {
             "cmd_in": [
               {
@@ -458,7 +510,7 @@ mod tests {
           "type": "app",
           "name": "default_app_cpp",
           "version": "0.1.0",
-                  "dependencies": [],
+          "dependencies": [],
           "api": {
             "cmd_in": [
               {
@@ -514,7 +566,7 @@ mod tests {
           "type": "app",
           "name": "default_app_cpp",
           "version": "0.1.0",
-                  "dependencies": [],
+          "dependencies": [],
           "api": {
             "cmd_in": [
               {
@@ -573,7 +625,7 @@ mod tests {
           "type": "app",
           "name": "default_app_cpp",
           "version": "0.1.0",
-                  "dependencies": [],
+          "dependencies": [],
           "api": {
             "cmd_in": [
               {
@@ -627,7 +679,7 @@ mod tests {
           "type": "app",
           "name": "default_app_cpp",
           "version": "0.1.0",
-                  "dependencies": [],
+          "dependencies": [],
           "api": {
             "cmd_in": [
               {
@@ -681,7 +733,7 @@ mod tests {
           "type": "app",
           "name": "default_app_cpp",
           "version": "0.1.0",
-                  "dependencies": [],
+          "dependencies": [],
           "api": {
             "cmd_in": [
               {
@@ -735,7 +787,7 @@ mod tests {
           "type": "extension",
           "name": "default_extension_cpp",
           "version": "0.1.0",
-                  "dependencies": [],
+          "dependencies": [],
           "api": {
             "cmd_in": [
               {
@@ -781,7 +833,7 @@ mod tests {
           "type": "extension",
           "name": "embedding",
           "version": "0.1.0",
-          "dependencies": [
+  "dependencies": [
             {
               "type": "system",
               "name": "ten_runtime_python",
@@ -863,7 +915,7 @@ mod tests {
           "type": "app",
           "name": "default_app_cpp",
           "version": "0.1.0",
-                  "dependencies": [],
+          "dependencies": [],
           "api": {
             "cmd_in": [
               {
@@ -898,7 +950,7 @@ mod tests {
           "type": "app",
           "name": "default_app_cpp",
           "version": "0.1.0",
-                  "dependencies": [],
+          "dependencies": [],
           "api": {
             "cmd_in": [
               {
@@ -1236,7 +1288,7 @@ mod tests {
               "name": "ext_a",
               "version": "1.0.0",
               "hash": "e8dc07a47927e9a650d23f77676b798e0856dd169fea70e7db57d57095261a68",
-              "dependencies": []
+      "dependencies": []
             }
           ]
         }"#;
@@ -1285,7 +1337,7 @@ mod tests {
               "name": "ext_a",
               "version": "1.0.0",
               "hash": "e8dc07a47927e9a650d23f77676b798e0856dd169fea70e7db57d57095261a68",
-              "dependencies": [
+      "dependencies": [
                 {
                   "type": "extension",
                   "name": "ext_a"
@@ -1316,7 +1368,7 @@ mod tests {
             "name": "ext_b",
             "version": "1.0.0",
             "hash": "e6d7ff0aefd1a0618c9f7d8c154b1b90c917390bd00d2a107eae616a36a99391",
-            "dependencies": [
+    "dependencies": [
               {
                 "type": "extension",
                 "name": "ext_a"
@@ -1328,7 +1380,7 @@ mod tests {
             "name": "ext_1",
             "version": "2.0.0",
             "hash": "e64b5c3c66a3014f2c58299d663533eb984ac9e71aa50067f6f3c3b9d409ccdf",
-            "dependencies": [
+    "dependencies": [
               {
                 "type": "extension",
                 "name": "ext_3"

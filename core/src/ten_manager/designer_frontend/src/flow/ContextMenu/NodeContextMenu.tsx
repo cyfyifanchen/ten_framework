@@ -1,12 +1,12 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
 //
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { FaEdit, FaTrash, FaTerminal } from "react-icons/fa";
+import { FilePenLineIcon, TerminalIcon, Trash2Icon } from "lucide-react";
 
 import ContextMenu, { ContextMenuItem } from "@/flow/ContextMenu/ContextMenu";
 import { CustomNodeType } from "@/flow/CustomNode";
@@ -36,8 +36,8 @@ const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
 
   const items: ContextMenuItem[] = [
     {
-      label: t("Edit manifest.json"),
-      icon: <FaEdit />,
+      label: t("action.edit") + " manifest.json",
+      icon: <FilePenLineIcon />,
       onClick: () => {
         onClose();
         if (node?.data.url)
@@ -49,8 +49,8 @@ const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
       },
     },
     {
-      label: t("Edit property.json"),
-      icon: <FaEdit />,
+      label: t("action.edit") + " property.json",
+      icon: <FilePenLineIcon />,
       onClick: () => {
         onClose();
         if (node?.data.url)
@@ -65,8 +65,8 @@ const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
       separator: true,
     },
     {
-      label: t("Launch terminal"),
-      icon: <FaTerminal />,
+      label: t("action.launchTerminal"),
+      icon: <TerminalIcon />,
       onClick: () => {
         onClose();
         onLaunchTerminal({ title: node.data.name, url: node.data.url });
@@ -76,8 +76,8 @@ const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
       separator: true,
     },
     {
-      label: t("Delete"),
-      icon: <FaTrash />,
+      label: t("action.delete"),
+      icon: <Trash2Icon />,
       onClick: () => {
         onClose();
       },

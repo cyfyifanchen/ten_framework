@@ -1,5 +1,5 @@
 #
-# Copyright © 2024 Agora
+# Copyright © 2025 Agora
 # This file is part of TEN Framework, an open source project.
 # Licensed under the Apache License, Version 2.0, with certain conditions.
 # Refer to the "LICENSE" file in the root directory for more information.
@@ -43,13 +43,6 @@ config("config_for_ten_packages") {
     ldflags =
         [ "-Wl,-rpath,@loader_path/../../../system/ten_runtime_python/lib" ]
   }
-}
-
-config("config_for_standalone_ten_packages") {
-  configs = [ ":ten_runtime_python_common_libs" ]
-
-  include_dirs = [ "//.ten/app/ten_packages/system/ten_runtime_python/include" ]
-  lib_dirs = [ "//.ten/app/ten_packages/system/ten_runtime_python/lib" ]
 }
 
 ten_package("ten_runtime_python") {

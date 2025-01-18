@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -12,16 +12,15 @@ use std::{
 use actix_web::{web, HttpResponse, Responder};
 use serde::Serialize;
 
-use ten_rust::pkg_info::manifest::dump_manifest_str_to_file;
 use ten_rust::pkg_info::pkg_type::PkgType;
+use ten_rust::pkg_info::{
+    constants::MANIFEST_JSON_FILENAME, manifest::dump_manifest_str_to_file,
+};
 
-use crate::{
-    constants::MANIFEST_JSON_FILENAME,
-    designer::{
-        get_all_pkgs::get_all_pkgs,
-        response::{ApiResponse, ErrorResponse, Status},
-        DesignerState,
-    },
+use crate::designer::{
+    get_all_pkgs::get_all_pkgs,
+    response::{ApiResponse, ErrorResponse, Status},
+    DesignerState,
 };
 
 #[derive(Serialize, Debug, PartialEq)]

@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Agora
+// Copyright © 2025 Agora
 // This file is part of TEN Framework, an open source project.
 // Licensed under the Apache License, Version 2.0, with certain conditions.
 // Refer to the "LICENSE" file in the root directory for more information.
@@ -97,7 +97,7 @@ const TerminalPopup: React.FC<TerminalPopupProps> = ({ data, onClose }) => {
     }, 0);
 
     // Initialize the websocket connection to the backend.
-    const wsUrl = `ws://localhost:49483/ws/terminal?path=${encodeURIComponent(
+    const wsUrl = `ws://localhost:49483/api/designer/v1/ws/terminal?path=${encodeURIComponent(
       data.url
     )}`;
     ws.current = new WebSocket(wsUrl);
